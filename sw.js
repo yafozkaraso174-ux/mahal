@@ -1,4 +1,4 @@
-const CACHE = 'mahal-v6';
+const CACHE = 'mahal-v7';
 const ASSETS = ['./manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -17,6 +17,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // طلبات سوبابيز وأي موقع خارجي: سيبها للشبكة دايماً — من غير كاش خالص
+  if (new URL(req.url).origin !== self.location.origin) return;
   // صفحات التطبيق: شبكة أولاً عشان التحديثات توصل فوراً، والكاش احتياطي أوفلاين
   if (req.mode === 'navigate' || req.destination === 'document') {
     e.respondWith(
