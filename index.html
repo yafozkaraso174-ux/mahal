@@ -443,7 +443,7 @@ return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin
 ${DB.suppliers.map(x=>`<option value="${x.id}" ${x.id===d.supplierId?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
 <button class="add-item" style="margin-top:8px;margin-bottom:0" onclick="openPartySheet('s',null,true)">＋ مورد جديد</button></div>
 <div class="sec-title" style="margin-top:4px">البضاعة اللي دخلت</div>
-${d.items.map((it,i)=>{const pp=prod(it.productId);const changed=pp&&num(it.cost)!==pp.cost;return `<div class="item-row"><div class="mid"><div class="t">${esc(it.name)}</div><div class="s" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px">سعر الشراء <input class="cost-in" inputmode="decimal" value="${esc(String(it.cost))}" oninput="purDraft.items[${i}].cost=this.value;updPurTotals()"> ج/${esc(it.unit)}${changed?`<span class="badge b-amber" style="margin-top:0">المسجل ${fmt(pp.cost)}</span>`:''}</div></div>
+${d.items.map((it,i)=>{const pp=prod(it.productId);const changed=pp&&num(it.cost)!==pp.cost;return `<div class="item-row"><div class="mid"><div class="t">${esc(it.name)}</div><div class="s" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px">سعر الشراء <input class="cost-in" inputmode="decimal" value="${esc(String(it.cost))}" oninput="purDraft.items[${i}].cost=this.value;updPurTotals()"> ج/${esc(it.unit)}${changed?`<span class="badge b-amber" id="pur-chg-${i}" style="margin-top:0">المسجل ${fmt(pp.cost)}</span>`:`<span class="badge b-amber" id="pur-chg-${i}" style="margin-top:0;display:none">${pp?`المسجل ${fmt(pp.cost)}`:''}</span>`}</div></div>
 <div class="qty"><button onclick="chPQty(${i},1)">＋</button><span class="n">${fmt(it.qty)}</span><button onclick="chPQty(${i},-1)">−</button></div>
 <div class="amt" id="pur-amt-${i}" style="width:60px;text-align:left">${fmt(it.qty*num(it.cost))}</div>
 <button style="color:var(--red)" onclick="purDraft.items.splice(${i},1);render()">${ic('trash',18)}</button></div>`;}).join('')}
@@ -461,7 +461,8 @@ function chPQty(i,d){const it=purDraft.items[i];it.qty=Math.max(1,(+it.qty||1)+d
 function updPurTotals(){const d=purDraft;if(!d)return;const total=d.items.reduce((s,it)=>s+it.qty*num(it.cost),0);
 const te=$('#pur-total');if(te)te.textContent=fmt(total)+' جنيه';
 const le=$('#pur-left');if(le)le.textContent=fmt(Math.max(total-num(d.paid),0))+' جنيه';
-d.items.forEach((it,i)=>{const a=$('#pur-amt-'+i);if(a)a.textContent=fmt(it.qty*num(it.cost));});}
+d.items.forEach((it,i)=>{const a=$('#pur-amt-'+i);if(a)a.textContent=fmt(it.qty*num(it.cost));
+const p0=prod(it.productId);const b=$('#pur-chg-'+i);if(b&&p0)b.style.display=num(it.cost)!==p0.cost?'':'none';});}
 function openPickPurProduct(){
 sheet('اختار الصنف اللي اتورّد',`<div class="search" style="margin-top:0">${ic('search',18)}<input placeholder="دوّر…" oninput="$('#ppp-list').innerHTML=pickPurListHTML(this.value)"></div><div id="ppp-list">${pickPurListHTML('')}</div><button class="add-item" style="margin-top:4px;color:#9A6A14" onclick="closeSheet();openProductSheet(null,true)">＋ صنف جديد لسه متسجلش</button>`);}
 function pickPurListHTML(q){return DB.products.filter(p=>!q||p.name.includes(q)).map(p=>`<button class="row" style="margin-bottom:6px" onclick="pickPurProduct('${p.id}')"><div class="mid"><div class="t">${esc(p.name)}</div><div class="s">آخر شراء ${fmt(p.cost)} ج · متاح حالياً ${fmt(p.stock)}</div></div>${ic('plus',18)}</button>`).join('')||'<div class="empty">مفيش نتايج</div>';}
@@ -602,6 +603,7 @@ else{html=vDash();}
 app.innerHTML=html;window.scrollTo(0,0);}
 window.addEventListener('hashchange',render);
 render();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 </body>
 </html>
