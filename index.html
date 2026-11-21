@@ -138,10 +138,22 @@ button.row{cursor:pointer}
 .ord .oh{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .ord .onm{font-size:14px;font-weight:800}
 .ord .otm{font-size:11px;color:var(--muted);font-weight:600}
-.ord .oit{font-size:12.5px;color:var(--ink);margin-top:8px;line-height:1.9;font-weight:600}
-.ord .ont{font-size:12px;color:var(--muted);margin-top:6px;font-weight:600}
+.ord .oitems{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:7px 12px;margin-top:10px}
+.ord .oitem{display:flex;align-items:baseline;gap:7px;font-size:12.5px;font-weight:600;padding:3.5px 0}
+.ord .oitem+.oitem{border-top:1px dashed var(--line)}
+.ord .oitem .q{color:var(--green);font-weight:800;flex-shrink:0}
+.ord .oitem .nm{flex:1;min-width:0}
+.ord .oitem .pr{color:var(--muted);font-weight:700;font-size:11.5px;flex-shrink:0}
+.ord .oaddr{display:flex;gap:7px;align-items:flex-start;font-size:12px;color:var(--muted);font-weight:600;margin-top:9px;line-height:1.7}
+.ord .oaddr .i{width:15px;height:15px;margin-top:2px}
+.ord .ofoot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.ord .oamt{font-size:17px;font-weight:800}
+.ord .oamt small{font-size:11px;color:var(--muted);font-weight:600}
+.ord .oph{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:var(--blue);text-decoration:none;direction:ltr}
 .ord .obt{display:flex;gap:8px;margin-top:10px}
-.ord .obt button{flex:1;border-radius:10px;padding:9px 0;font-size:12px;font-weight:800}
+.ord .obt>*{flex:1;border-radius:10px;padding:9px 0;font-size:12px;font-weight:800}
+.ord .ob-ed{background:var(--blue-soft);color:var(--blue)}
+.ord .ob-del{flex:0 0 42px;background:var(--card);border:1px solid var(--line);color:var(--red);display:flex;align-items:center;justify-content:center}
 .ord .ob-ok{background:var(--green);color:#fff}
 .ord .ob-no{background:var(--red-soft);color:var(--red)}
 .ord .ob-wa{background:var(--green-soft);color:var(--green);text-decoration:none;display:flex;align-items:center;justify-content:center;gap:4px}
@@ -348,7 +360,8 @@ async pushProducts(){await this.login();
  return rows.length;},
 async fetchOrders(){await this.login();return await this.req('orders?order=created_at.desc&limit=100');},
 async setOrderStatus(id,st){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:st})});},
-async deleteOrder(id){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'DELETE'});}
+async deleteOrder(id){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'DELETE'});},
+async updateOrder(id,items,total){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({items,total})});}
 };
 let shopOrders=null,shopOrdersErr=false,shopOrdersAt=0;
 async function syncShopNow(){if(!SB.ready()){toast('حط بيانات المتجر الأول من الإعدادات');return;}
@@ -359,6 +372,39 @@ try{shopOrders=await SB.fetchOrders();shopOrdersErr=false;}catch(e){shopOrdersEr
 shopOrdersAt=Date.now();
 if(!quiet){render();}else{const sec=$('#shop-sec');if(sec)sec.innerHTML=shopSectionHTML();}}
 async function markOrder(id,st){try{await SB.setOrderStatus(id,st);(shopOrders||[]).forEach(o=>{if(String(o.id)===String(id))o.status=st;});render();toast(st==='done'?'الطلب اتقفل ✓':'الطلب اتلغى');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
+let ordDraft=null;
+function openOrderEdit(id){const o=(shopOrders||[]).find(x=>String(x.id)===String(id));if(!o)return;
+ordDraft={id,items:(o.items||[]).map(it=>({...it}))};
+sheet('تعديل الطلب',orderEditHTML());}
+function orderEditHTML(){const d=ordDraft;const total=Math.round(d.items.reduce((t,it)=>t+it.qty*it.price,0)*100)/100;
+return `<div id="ord-edit">${d.items.length?d.items.map((it,i)=>`<div class="item-row"><div class="mid"><div class="t">${esc(it.name)}</div><div class="s">${fmt(it.price)} ج لل${esc(it.unit||'قطعة')} · الإجمالي ${fmt(it.qty*it.price)}</div></div><div class="qty"><button onclick="ordQty(${i},1)">＋</button><span class="n">${fmt(it.qty)}</span><button onclick="ordQty(${i},-1)">−</button></div><button style="color:var(--red)" onclick="ordDelItem(${i})">${ic('trash',18)}</button></div>`).join(''):`<div class="empty">الطلب اتفضى — ارجع وامسحه لو عايز</div>`}
+<div style="display:flex;justify-content:space-between;margin:12px 2px;font-weight:800;font-size:15px"><span>الإجمالي بعد التعديل</span><span>${fmt(total)} جنيه</span></div>
+<button class="btn btn-p" style="width:100%" onclick="saveOrderEdit()">حفظ التعديل ✓</button></div>`;}
+function ordQty(i,d){const it=ordDraft.items[i];it.qty=Math.max(1,(+it.qty||1)+d);const el=$('#ord-edit');if(el)el.outerHTML=orderEditHTML();}
+function ordDelItem(i){ordDraft.items.splice(i,1);const el=$('#ord-edit');if(el)el.outerHTML=orderEditHTML();}
+async function saveOrderEdit(){const d=ordDraft;if(!d)return;if(!d.items.length){toast('مفيش أصناف في الطلب');return;}
+const total=Math.round(d.items.reduce((t,it)=>t+it.qty*it.price,0)*100)/100;
+try{await SB.updateOrder(d.id,d.items.map(it=>({id:it.id,name:it.name,qty:it.qty,price:it.price,unit:it.unit})),total);
+(shopOrders||[]).forEach(o=>{if(String(o.id)===String(d.id)){o.items=d.items.map(it=>({...it}));o.total=total;}});
+ordDraft=null;closeSheet();render();toast('الطلب اتعدّل ✓');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
+async function confirmOrder(id){const o=(shopOrders||[]).find(x=>String(x.id)===String(id));if(!o)return;
+if(!o.items||!o.items.length){toast('الطلب فاضي');return;}
+const items=o.items.map(it=>{const p=prod(it.id)||DB.products.find(x=>x.name===it.name)||null;
+return {productId:p?p.id:'',name:it.name,unit:it.unit||(p?p.unit:'قطعة'),qty:+it.qty||1,price:+it.price||0,cost:p?p.cost:0,_p:p};});
+for(const it of items){if(it._p&&it.qty>it._p.stock){toast(`الكمية من "${it.name}" أكبر من المتاح (${fmt(it._p.stock)} ${it.unit}) — عدّل الطلب الأول`);return;}}
+const ph=String(o.phone||'').replace(/\D/g,'');
+let c=ph?DB.customers.find(x=>String(x.phone||'').replace(/\D/g,'')===ph):null;
+if(!c)c=DB.customers.find(x=>x.name.trim()===String(o.customer_name||'').trim());
+if(!c){c={id:uid(),name:String(o.customer_name||'زبون متجر').trim(),phone:String(o.phone||''),type:'r'};DB.customers.push(c);}
+try{await SB.setOrderStatus(id,'done');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');return;}
+const invItems=items.map(it=>({productId:it.productId,name:it.name,unit:it.unit,qty:it.qty,price:it.price,cost:it.cost}));
+const total=Math.round(invItems.reduce((t,it)=>t+it.qty*it.price,0)*100)/100;
+const inv={id:uid(),num:DB.nextNum++,date:new Date().toISOString(),customerId:c.id,priceType:'r',items:invItems,total,paid:0};
+invItems.forEach(it=>{const p=prod(it.productId);if(p)p.stock=Math.round((p.stock-it.qty)*100)/100;});
+DB.invoices.push(inv);save();
+o.status='done';
+toast('اتحولت لفاتورة #'+inv.num.toLocaleString(AR)+' ✓');
+go('#/customers/'+c.id);}
 function delOrder(id){sheet('مسح الطلب',`<div class="alert" style="margin-top:0;background:var(--red-soft);border-color:#EFC9C5"><span style="color:var(--red)">${ic('alert')}</span><div class="tx" style="color:var(--red)">الطلب هيتمسح نهائي ومش هيقدر يرجع تاني. لو عايز تخبيه من غير مسح، اختار «إلغاء» بدلها.</div></div>
 <button class="btn btn-p" style="background:var(--red);width:100%" onclick="delOrderGo('${id}')">امسح نهائي</button>
 <button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="closeSheet()">ارجع</button>`);}
@@ -378,9 +424,9 @@ function vOrders(){let body;
 if(!SB.ready()){body=`<div class="empty"><div class="big">المتجر لسه متوصلش</div>حط بيانات المتجر من الإعدادات الأول</div><button class="btn btn-p" style="width:100%" onclick="go('#/settings')">روح للإعدادات</button>`;}
 else if(shopOrders===null){body=`<div class="empty">بنحمّل الطلبات…</div>`;setTimeout(()=>refreshOrders(false),50);}
 else if(!shopOrders.length){body=`<div class="empty"><div class="big">مفيش طلبات لسه</div>أول ما زبون يطلب من المتجر هيظهر هنا</div>`;}
-else{body=shopOrders.map(o=>{const items=(o.items||[]).map(it=>`${esc(it.name)} × ${fmt(it.qty)}`).join('، ');
+else{body=shopOrders.map(o=>{const items=(o.items||[]).map(it=>`<div class="oitem"><span class="q">${fmt(it.qty)} ×</span><span class="nm">${esc(it.name)}</span><span class="pr">${fmt(Math.round((it.price||0)*(it.qty||0)*100)/100)} ج</span></div>`).join('');
 const wa=o.phone?waLink(o.phone,'أهلاً '+o.customer_name+'، بخصوص طلبك من '+DB.settings.shopName):null;
-return `<div class="ord${o.status!=='new'?' done':''}"><div class="oh"><div class="onm">${esc(o.customer_name)}</div><span class="badge ${o.status==='new'?'b-amber':o.status==='done'?'b-green':'b-red'}">${o.status==='new'?'جديد':o.status==='done'?'تم ✓':'ملغي'}</span></div><div class="otm">${relDate(o.created_at)} · ${new Date(o.created_at).toLocaleTimeString(AR,{hour:'numeric',minute:'2-digit'})}</div><div class="oit">${items}</div>${o.note?`<div class="ont">ملاحظة: ${esc(o.note)}</div>`:''}<div class="oh" style="margin-top:8px"><div class="amt" style="font-weight:800">${fmt(o.total)} <small style="font-size:10.5px;color:var(--muted)">${esc(DB.settings.currency||'جنيه')}</small></div>${o.phone?`<div class="otm" style="direction:ltr">${esc(o.phone)}</div>`:''}</div>${o.status==='new'?`<div class="obt"><button class="ob-ok" onclick="markOrder('${o.id}','done')">تم ✓</button>${wa?`<a class="ob-wa" href="${wa}" target="_blank" rel="noopener">${ic('wa',15)} واتساب</a>`:''}<button class="ob-no" onclick="markOrder('${o.id}','cancelled')">إلغاء</button><button class="ob-no" onclick="delOrder('${o.id}')">مسح</button></div>`:`<div class="obt"><button class="ob-no" onclick="delOrder('${o.id}')">مسح الطلب</button></div>`}</div>`;}).join('');}
+return `<div class="ord${o.status!=='new'?' done':''}"><div class="oh"><div class="onm">${esc(o.customer_name)}</div><span class="badge ${o.status==='new'?'b-amber':o.status==='done'?'b-green':'b-red'}">${o.status==='new'?'جديد':o.status==='done'?'تم ✓':'ملغي'}</span></div><div class="otm">طلب #${Number(o.id).toLocaleString(AR)} · ${relDate(o.created_at)} · ${new Date(o.created_at).toLocaleTimeString(AR,{hour:'numeric',minute:'2-digit'})}</div><div class="oitems">${items}</div>${o.note?`<div class="oaddr">${ic('truck',15)}<span>${esc(o.note)}</span></div>`:''}<div class="ofoot"><div class="oamt">${fmt(o.total)} <small>${esc(DB.settings.currency||'جنيه')}</small></div>${o.phone?`<a class="oph" href="tel:${esc(o.phone)}">${ic('phone',14)} ${esc(o.phone)}</a>`:''}</div>${o.status==='new'?`<div class="obt"><button class="ob-ok" style="flex:1.4" onclick="confirmOrder('${o.id}')">تم ✓</button><button class="ob-ed" onclick="openOrderEdit('${o.id}')">تعديل</button>${wa?`<a class="ob-wa" href="${wa}" target="_blank" rel="noopener">${ic('wa',15)} واتساب</a>`:''}<button class="ob-no" onclick="markOrder('${o.id}','cancelled')">إلغاء</button><button class="ob-del" onclick="delOrder('${o.id}')" title="مسح نهائي">${ic('trash',15)}</button></div>`:`<div class="obt"><button class="ob-no" onclick="delOrder('${o.id}')">مسح الطلب نهائي</button></div>`}</div>`;}).join('');}
 return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">طلبات المتجر</div></div></div>
 <div class="content">${body}</div>`+navbar('home');}
 /* ============ derived ============ */
