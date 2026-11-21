@@ -306,7 +306,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r7';
+const APP_VER='2026-11-21r8';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -346,7 +346,7 @@ const legacy=(DB.users||[]).filter(lu=>!lu.__converted);
 return `<div class="appbar"><div>${backBtn('#/settings')}<div class="shop" style="margin-top:4px">المستخدمين</div></div></div>
 <div class="content">
 ${!usersCache?'<div class="empty">بيجيلك المستخدمين…</div>':''}
-${rows.map(u=>`<div class="row"><div class="ic" style="background:${u.active?'var(--green-soft);color:var(--green)':'var(--red-soft);color:var(--red)'}">${ic('users')}</div><div class="mid"><div class="t">${esc(u.name)}${u.owner?' 👑':''}</div><div class="s">${u.active?'شغال':'موقوف'} · ${permSummary(u)}</div></div><div class="end">${u.owner?'':`<button class="cbtn" style="margin-inline-end:6px;background:${u.active?'var(--red-soft);color:var(--red)':'var(--green-soft);color:var(--green)'}" onclick="toggleUser('${u.id}')">${u.active?'ايقاف':'تفعيل'}</button>`}<button style="color:var(--muted);padding:6px" onclick="openUserSheet('${u.id}')">${ic('pencil',18)}</button></div></div>`).join('')}
+${rows.map(u=>`<div class="row"><div class="ic" style="background:${u.active?'var(--green-soft);color:var(--green)':'var(--red-soft);color:var(--red)'}">${ic('users')}</div><div class="mid"><div class="t">${esc(u.name)}${u.owner?' 👑':''}</div><div class="s">${u.active?'شغال':'موقوف'} · ${permSummary(u)}</div></div><div class="end">${u.owner?'':`<button class="cbtn" style="margin-inline-end:6px;background:${u.active?'var(--red-soft);color:var(--red)':'var(--green-soft);color:var(--green)'}" onclick="toggleUser('${u.id}')">${u.active?'ايقاف':'تفعيل'}</button><button style="color:var(--red);padding:6px" onclick="deleteUser('${u.id}')">${ic('trash',18)}</button>`}<button style="color:var(--muted);padding:6px" onclick="openUserSheet('${u.id}')">${ic('pencil',18)}</button></div></div>`).join('')}
 <button class="add-item" onclick="openUserSheet('')">＋ مستخدم جديد</button>
 ${legacy.length?`<div class="sec-title" style="font-size:13px">حسابات قديمة على الجهاز ده (بالرقم السري)</div>
 <div class="set-row" style="cursor:default"><span style="font-weight:600;color:var(--muted);font-size:12px;line-height:1.8">دي حسابات النظام القديم — حوّلها لحسابات بإيميل وباسورد عشان تشتغل من أي جهاز. بعد التحويل ممكن تمسحها من هنا.</span></div>
@@ -396,7 +396,7 @@ async function toggleUser(id){const u=(usersCache||[]).find(x=>String(x.id)===St
 try{await SB.ensureSession();
  await SB.req('shop_users?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({active:!u.active,updated_at:new Date().toISOString()})});
  usersCache=null;render();toast(u.active?'الحساب اتوقف':'الحساب اتفعّل ✓');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
-async function deleteUser(id){if(!confirm('هتمسح المستخدم ده نهائي — مش هيقدر يسجل دخول تاني. متأكد؟'))return;
+async function deleteUser(id){if(!confirm('هتمسح حساب المستخدم ده نهائي من النظام كله — مش هيقدر يسجل دخول من أي جهاز، والإيميل بتاعه هيبقى متاح تضيفه من جديد. متأكد؟'))return;
 try{await SB.ensureSession();
  await SB.req('shop_users?id=eq.'+encodeURIComponent(id),{method:'DELETE',headers:{'Prefer':'return=minimal'}});
  usersCache=null;closeSheet();render();toast('اتمسح');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
