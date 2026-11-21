@@ -293,6 +293,7 @@ if(!DB.drafts)DB.drafts=[];
 if(!DB.movements)DB.movements=[];
 if(!Array.isArray(DB.users))DB.users=[];
 if(!DB.users.length&&localStorage.getItem('mahal_pin')){DB.users.push({id:uid(),name:'صاحب المحل',pinH:localStorage.getItem('mahal_pin'),owner:true,active:true,perms:{invoice:1,products:1,customers:1,suppliers:1,orders:1,settings:1,del:1}});localStorage.removeItem('mahal_pin');sessionStorage.removeItem('mahal_pin_ok');}
+DB.users.forEach(u=>{if(!u.owner&&u.perms&&u.perms.stats==null)u.perms.stats=1;});
 function save(){localStorage.setItem(KEY,JSON.stringify(DB));}
 function logMove(pid,kind,qty,before,after,ref){DB.movements.push({id:uid(),pid,kind,qty,before,after,ref:ref||'',date:new Date().toISOString()});}
 save();
@@ -303,7 +304,7 @@ try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');if(cu){cons
 async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 const pinHash=pin=>sha256hex('mahal-pin-v1:'+pin);
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const PERMS=[['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
+const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vSetup(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('users',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>أول مرة تشغّل البرنامج — اعمل حساب المالك عشان البرنامج يتقفل على اللي انت تختارهم بس</p>
 <div class="field" style="text-align:right"><div class="lbl">اسمك</div><input id="su-name" style="letter-spacing:0;font-size:16px" placeholder="مثال: اسماعيل"></div>
@@ -565,12 +566,12 @@ function vDash(){const t=totals();const low=DB.products.filter(p=>p.stock<=p.low
 const cur=DB.settings.currency||'جنيه';
 return appbar(greeting(),esc(DB.settings.shopName),gearBtn())+`
 <div class="content">
-<div class="grid2">
+${can('stats')?`<div class="grid2">
  <div class="stat hero"><div class="lbl">مبيعات النهاردة</div><div class="val">${fmt(t.salesToday)} <small>${cur}</small></div><div class="sub">${DB.invoices.filter(i=>isToday(i.date)).length.toLocaleString(AR)} فواتير النهاردة</div></div>
  <div class="stat"><div class="lbl">ربح الشهر ده</div><div class="val" style="color:var(--green)">${fmt(t.profitMonth)} <small>${cur}</small></div><div class="sub">من ${DB.invoices.filter(i=>sameMonth(i.date)).length.toLocaleString(AR)} فاتورة</div></div>
  <div class="stat"><div class="lbl"><span class="dot" style="background:var(--green)"></span>ليك عند الزباين</div><div class="val">${fmt(t.receivables)} <small>${cur}</small></div><div class="sub">عند ${DB.customers.filter(c=>custBalance(c.id)>0).length.toLocaleString(AR)} زباين</div></div>
  <div class="stat"><div class="lbl"><span class="dot" style="background:var(--red)"></span>عليك للموردين</div><div class="val">${fmt(t.payables)} <small>${cur}</small></div><div class="sub">لـ ${DB.suppliers.filter(s=>suppBalance(s.id)>0).length.toLocaleString(AR)} موردين</div></div>
-</div>
+</div>`:''}
 <div class="sec-title">حركة سريعة</div>
 <div class="actions">
  <button class="act" onclick="go('#/invoice')"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="tx">فاتورة جديدة</div></button>
