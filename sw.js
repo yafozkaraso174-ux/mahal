@@ -1,4 +1,4 @@
-const CACHE = 'mahal-v10';
+const CACHE = 'mahal-v11';
 const ASSETS = ['./manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(

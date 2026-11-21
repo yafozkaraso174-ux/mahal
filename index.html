@@ -306,7 +306,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r8';
+const APP_VER='2026-11-21r9';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -589,7 +589,7 @@ const total=Math.round((o.items.reduce((t,it)=>t+(+it.qty||1)*(+it.price||0),0)+
 sheet('تأكيد الطلب ✓',`<div style="font-size:14px;font-weight:800;margin-bottom:4px">${esc(o.customer_name||'زبون متجر')}</div>
 <div class="total-card" style="margin-bottom:12px">
 <div class="trow"><span class="k">إجمالي الطلب</span><span style="font-weight:800">${fmt(total)} جنيه</span></div>
-<div class="trow"><span class="k">الزبون دفع دلوقتي</span><input id="co-paid" inputmode="decimal" value="${fmt(total)}" oninput="const l=Math.max(${total}-num(this.value),0);$('#co-left').textContent=l>0?('هيبقى عليه '+fmt(l)+' ج على الحساب'):'خالص ✓';"></div>
+<div class="trow"><span class="k">الزبون دفع دلوقتي</span><input id="co-paid" inputmode="decimal" value="${fmt(total)}" oninput="const l=Math.round((${total}-num(this.value))*100)/100;$('#co-left').textContent=l>0?('هيبقى عليه '+fmt(l)+' ج على الحساب'):(l<0?('خالص ✓ + رصيد له '+fmt(-l)+' ج'):'خالص ✓');"></div>
 <div class="trow grand"><span>الباقي</span><span class="due" id="co-left">خالص ✓</span></div></div>
 <button class="btn btn-p" style="width:100%" onclick="confirmOrderGo('${id}')">حوّل لفاتورة ✓</button>
 <button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="closeSheet()">ارجع</button>`);}
@@ -605,12 +605,12 @@ try{await SB.setOrderStatus(id,'done');}catch(e){toast('في مشكلة في ا�
 const invItems=items.map(it=>({productId:it.productId,name:it.name,unit:it.unit,qty:it.qty,price:it.price,cost:it.cost}));
 const fee=Math.max(0,+o.delivery_fee||0);
 const total=Math.round((invItems.reduce((t,it)=>t+it.qty*it.price,0)+fee)*100)/100;
-const paid=Math.min(num($('#co-paid')?.value),total);
+const paid=num($('#co-paid')?.value);
 const inv={id:uid(),num:DB.nextNum++,date:new Date().toISOString(),customerId:c.id,priceType:'r',items:invItems,total,paid,deliveryFee:fee};
 invItems.forEach(it=>{const p=prod(it.productId);if(p){const b=p.stock;p.stock=Math.round((p.stock-it.qty)*100)/100;logMove(p.id,'order',-it.qty,b,p.stock,'فاتورة #'+inv.num);}});
 DB.invoices.push(inv);save();
 o.status='done';closeSheet();
-toast('اتحولت لفاتورة #'+inv.num.toLocaleString(AR)+' ✓');
+toast('اتحولت لفاتورة #'+inv.num.toLocaleString(AR)+' ✓'+(paid>total?(' — '+fmt(Math.round((paid-total)*100)/100)+' ج زيادة رصيد للزبون'):''));
 go('#/customers/'+c.id);}
 function delOrder(id){if(!can('del')){toast('مش مسموح ليك تمسح — كلم صاحب المحل');return;}sheet('مسح الطلب',`<div class="alert" style="margin-top:0;background:var(--red-soft);border-color:#EFC9C5"><span style="color:var(--red)">${ic('alert')}</span><div class="tx" style="color:var(--red)">الطلب هيتمسح نهائي ومش هيقدر يرجع تاني. لو عايز تخبيه من غير مسح، اختار «إلغاء» بدلها.</div></div>
 <button class="btn btn-p" style="background:var(--red);width:100%" onclick="delOrderGo('${id}')">امسح نهائي</button>
@@ -650,7 +650,7 @@ DB.suppliers.forEach(s=>{const b=suppBalance(s.id);if(b>0)payables+=b;});
 return{salesToday,profitMonth,receivables,payables};}
 function activity(){const a=[];
 DB.invoices.forEach(i=>a.push({date:i.date,kind:'inv',text:'فاتورة لـ'+(cust(i.customerId)?.name||'زبون محذوف'),amt:i.total,left:i.total-i.paid,ref:i.id}));
-DB.payments.filter(p=>p.kind==='in').forEach(p=>a.push({date:p.date,kind:'pay',text:'دفعة من '+(cust(p.partyId)?.name||'زبون محذوف'),amt:p.amount,ref:p.id}));
+DB.payments.filter(p=>p.kind==='in').forEach(p=>a.push({date:p.date,kind:'pay',text:(p.amount<0?'خصم من رصيد ':'دفعة من ')+(cust(p.partyId)?.name||'زبون محذوف'),amt:p.amount,ref:p.id}));
 DB.payments.filter(p=>p.kind==='out').forEach(p=>a.push({date:p.date,kind:'payout',text:'دفعة لـ'+(supp(p.partyId)?.name||'مورد محذوف'),amt:p.amount,ref:p.id}));
 DB.purchases.forEach(pu=>a.push({date:pu.date,kind:'pur',text:'توريد من '+(supp(pu.supplierId)?.name||'مورد محذوف'),amt:pu.total,left:pu.total-pu.paid,ref:pu.id}));
 return a.sort((x,y)=>new Date(y.date)-new Date(x.date));}
@@ -714,7 +714,7 @@ function vCustomers(){const q=(state.cq||'').trim();const list=DB.customers.filt
 return appbar('الزباين','حسابات الزباين',`<button class="avatar" style="background:var(--blue)" onclick="openPartySheet('c')">${ic('plus',22)}</button>`)+`
 <div class="content">
 <div class="search">${ic('search',18)}<input placeholder="دوّر على زبون…" value="${esc(state.cq||'')}" oninput="state.cq=this.value;render()"></div>
-${list.length?list.map(c=>{const b=custBalance(c.id);return `<button class="row" onclick="go('#/customers/${c.id}')"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('users')}</div><div class="mid"><div class="t">${esc(c.name)}</div><div class="s">${c.type==='w'?'زبون جملة':'زبون قطاعي'}</div></div><div class="end">${b>0?`<div class="amt" style="color:var(--red)">${fmt(b)} <small>ج</small></div><span class="badge b-red">عليه</span>`:'<span class="badge b-green">خالص ✓</span>'}</div></button>`;}).join(''):`<div class="empty"><div class="big">مفيش زباين لسه</div>ضيف أول زبون من الزرار اللي فوق</div>`}
+${list.length?list.map(c=>{const b=custBalance(c.id);return `<button class="row" onclick="go('#/customers/${c.id}')"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('users')}</div><div class="mid"><div class="t">${esc(c.name)}</div><div class="s">${c.type==='w'?'زبون جملة':'زبون قطاعي'}</div></div><div class="end">${b>0?`<div class="amt" style="color:var(--red)">${fmt(b)} <small>ج</small></div><span class="badge b-red">عليه</span>`:(b<0?`<div class="amt" style="color:var(--green)">${fmt(-b)} <small>ج</small></div><span class="badge b-green">له رصيد</span>`:'<span class="badge b-green">خالص ✓</span>')}</div></button>`;}).join(''):`<div class="empty"><div class="big">مفيش زباين لسه</div>ضيف أول زبون من الزرار اللي فوق</div>`}
 </div>`+navbar('users');}
 function vSuppliers(){const q=(state.sq||'').trim();const list=DB.suppliers.filter(s=>!q||s.name.includes(q));
 return appbar('الموردين','حسابات الموردين',`<button class="avatar" style="background:var(--amber)" onclick="openPartySheet('s')">${ic('plus',22)}</button>`)+`
@@ -732,16 +732,16 @@ return `<div class="appbar"><div>${backBtn('#/customers')}<div class="shop" styl
  <div class="nm">${esc(c.name)}</div>
  <div class="tp"><span class="badge ${c.type==='w'?'b-green':'b-blue'}" style="margin-top:6px">${c.type==='w'?'زبون جملة':'زبون قطاعي'}</span></div>
  ${c.phone?`<div class="ph">${esc(c.phone)}</div>`:''}
- <div class="bal ${b>0?'owed':'clear'}"><div class="k">${b>0?'الباقي عليه':'حسابه خالص'}</div><div class="v">${fmt(Math.max(b,0))} <small>جنيه</small></div></div>
+ <div class="bal ${b>0?'owed':'clear'}"><div class="k">${b>0?'الباقي عليه':(b<0?'له رصيد عندك':'حسابه خالص')}</div><div class="v">${fmt(Math.abs(b))} <small>جنيه</small></div></div>
  <div class="cbtns">
   <button class="cbtn" style="background:var(--green);color:#fff" onclick="openPaymentSheet('in','${id}')">${ic('cash',16)} تسجيل دفعة</button>
   <button class="cbtn" style="background:var(--green-soft);color:var(--green)" onclick="go('#/invoice/${id}')">${ic('receipt',16)} فاتورة جديدة</button>
-  ${wa?`<a class="cbtn" style="background:#E7F5EC;color:#1E9E57" href="${wa}" target="_blank" rel="noopener">${ic('msg',16)} فكّره</a>`:''}
+  ${b>0&&wa?`<a class="cbtn" style="background:#E7F5EC;color:#1E9E57" href="${wa}" target="_blank" rel="noopener">${ic('msg',16)} فكّره</a>`:''}
  </div>
 </div>
 <div class="sec-title">الحركات على حسابه</div>
-${hist.length?hist.map(h=>h.kind==='inv'?`<div class="row"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${h.obj.num.toLocaleString(AR)}</div><div class="s">${relDate(h.obj.date)} · ${h.obj.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(h.obj.total)} <small>ج</small></div>${h.obj.total-h.obj.paid>0?`<span class="badge b-amber">باقي ${fmt(h.obj.total-h.obj.paid)}</span>`:'<span class="badge b-green">خالص ✓</span>'}</div><button style="color:var(--muted);padding:6px" onclick="printInvoiceById('${h.obj.id}')">${ic('printer',18)}</button></div>`
-:`<div class="row"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('cash')}</div><div class="mid"><div class="t">دفعة ${h.obj.note?('· '+esc(h.obj.note)):''}</div><div class="s">${relDate(h.obj.date)}</div></div><div class="end"><div class="amt" style="color:var(--green)">+${fmt(h.obj.amount)} <small>ج</small></div></div></div>`).join(''):`<div class="empty">لسه مفيش حركات على حسابه</div>`}
+${hist.length?hist.map(h=>h.kind==='inv'?`<div class="row"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${h.obj.num.toLocaleString(AR)}</div><div class="s">${relDate(h.obj.date)} · ${h.obj.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(h.obj.total)} <small>ج</small></div>${h.obj.total-h.obj.paid>0?`<span class="badge b-amber">باقي ${fmt(h.obj.total-h.obj.paid)}</span>`:(h.obj.paid>h.obj.total?`<span class="badge b-green">رصيد +${fmt(h.obj.paid-h.obj.total)}</span>`:'<span class="badge b-green">خالص ✓</span>')}</div><button style="color:var(--muted);padding:6px" onclick="printInvoiceById('${h.obj.id}')">${ic('printer',18)}</button></div>`
+:`<div class="row"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('cash')}</div><div class="mid"><div class="t">${h.obj.amount<0?'خصم من الرصيد':'دفعة'} ${h.obj.note?('· '+esc(h.obj.note)):''}</div><div class="s">${relDate(h.obj.date)}</div></div><div class="end"><div class="amt" style="color:${h.obj.amount<0?'var(--red)':'var(--green)'}">${h.obj.amount<0?'−':'+'}${fmt(Math.abs(h.obj.amount))} <small>ج</small></div></div></div>`).join(''):`<div class="empty">لسه مفيش حركات على حسابه</div>`}
 <button class="btn-danger" onclick="confirmSheet('هتمسح الزبون ده وفواتيره هتفضل محفوظة من غير اسمه. متأكد؟','امسح الزبون',()=>{DB.customers=DB.customers.filter(x=>x.id!=='${id}');save();go('#/customers');toast('اتمسح');})">مسح الزبون</button>
 </div>`+navbar('users');}
 function vSuppDetail(id){const s=supp(id);if(!s)return vSuppliers();const b=suppBalance(id);
@@ -767,11 +767,11 @@ ${hist.length?hist.map(h=>h.kind==='pur'?`<div class="row"><div class="ic" style
 let invDraft=null;
 function invMath(d){const sub=d.items.reduce((s,it)=>s+it.qty*it.price,0);const discPct=Math.min(100,Math.max(0,num(d.disc)));const taxPct=Math.max(0,num(d.tax));const discAmt=Math.round(sub*discPct)/100;const taxAmt=Math.round((sub-discAmt)*taxPct)/100;const total=Math.round((sub-discAmt+taxAmt)*100)/100;return{sub,discPct,taxPct,discAmt,taxAmt,total};}
 function invMathRows(m){let h='';if(m.discAmt>0)h+=`<div class="trow"><span class="k">خصم ${fmt(m.discPct)}٪</span><span style="color:var(--red);font-weight:800">−${fmt(m.discAmt)} جنيه</span></div>`;if(m.taxAmt>0)h+=`<div class="trow"><span class="k">ضريبة ${fmt(m.taxPct)}٪</span><span style="font-weight:800">+${fmt(m.taxAmt)} جنيه</span></div>`;if(m.discAmt>0||m.taxAmt>0)h+=`<div class="trow"><span class="k">الصافي</span><span style="font-weight:800;color:var(--green)">${fmt(m.total)} جنيه</span></div>`;return h;}
-function vInvoice(presetCust){if(!invDraft||invDraft._preset!==presetCust){invDraft={customerId:presetCust||'',priceType:'w',items:[],paid:'',disc:'',tax:'',_preset:presetCust};
+function vInvoice(presetCust){if(!invDraft||invDraft._preset!==presetCust){invDraft={customerId:presetCust||'',priceType:'w',items:[],paid:'',disc:'',tax:'',useCredit:true,_preset:presetCust};
  const c=cust(presetCust);if(c)invDraft.priceType=c.type;}
 const d=invDraft;const c=cust(d.customerId);
 const _m=invMath(d);const total=_m.total;
-const paid=num(d.paid);const left=Math.max(total-paid,0);
+const _pm=invPayMath(d,_m);const left=_pm.left;const over=_pm.over;
 return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">${d._draftId?'إكمال مسودة':'فاتورة جديدة'}</div></div><div style="font-size:13px;color:var(--muted);font-weight:800">#${DB.nextNum.toLocaleString(AR)}</div></div>
 <div class="content" style="padding-bottom:110px">
 <div class="field"><div class="lbl">الزبون</div><select onchange="invDraft.customerId=this.value;const cc=cust(this.value);if(cc)invDraft.priceType=cc.type;render()">
@@ -790,9 +790,11 @@ ${DB.customers.map(x=>`<option value="${x.id}" ${x.id===d.customerId?'selected':
 <div class="trow"><span class="k">ضريبة ٪</span><input inputmode="decimal" placeholder="٠" value="${esc(d.tax)}" oninput="invDraft.tax=this.value;updInvTotals()"></div>
 <div id="inv-math">${invMathRows(_m)}</div>
 <div class="trow"><span class="k">المدفوع دلوقتي</span><input inputmode="decimal" placeholder="٠" value="${esc(d.paid)}" oninput="invDraft.paid=this.value;updInvTotals()"></div>
-<div class="trow grand"><span>الباقي على حسابه</span><span class="due" id="inv-left">${fmt(left)} جنيه</span></div>
+<div class="trow" id="inv-credit-row" style="${_pm.credit>0?'':'display:none'}"><span class="k">له رصيد عندك: ${fmt(_pm.credit)} ج</span><label style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:13px;cursor:pointer"><input type="checkbox" ${d.useCredit!==false?'checked':''} onchange="invDraft.useCredit=this.checked;updInvTotals()" style="width:17px;height:17px;accent-color:var(--green)"> خصمه من الفاتورة</label></div>
+<div class="trow grand"><span>الباقي على حسابه</span><span class="due" id="inv-left">${payLeftText(_pm)}</span></div>
 </div>
 ${c&&left>0?`<div class="alert" style="background:var(--blue-soft);border-color:#C9D8E8"><span style="color:var(--blue)">${ic('receipt',18)}</span><div class="tx" style="color:#2F567F">الباقي هيتحط على حساب ${esc(c.name)} أوتوماتيك — هيبقى عليه ${fmt(custBalance(c.id)+left)} ج بالإضافة للقديم.</div></div>`:''}
+${c&&over>0?`<div class="alert" style="background:var(--green-soft);border-color:#BFE3C9"><span style="color:var(--green)">${ic('cash',18)}</span><div class="tx" style="color:#1E6B3C">${esc(c.name)} دافع زيادة ${fmt(over)} ج — هتتحط رصيد له عندك وتتخصم من فواتيره الجاية أوتوماتيك.</div></div>`:''}
 </div>
 <div class="cta"><button class="btn btn-s" style="flex:1;font-size:13px;gap:4px" onclick="saveInvDraft()">${ic('pencil',16)} مسودة</button><button class="btn btn-s" style="flex:1.3;font-size:13px;gap:4px" onclick="saveInvoice(true)">${ic('printer',16)} حفظ وطباعة</button><button class="btn btn-p" style="flex:1.5;font-size:13.5px" onclick="saveInvoice(false)">حفظ الفاتورة ✓</button></div>`;}
 function invItemRow(it,i){const p=prod(it.productId);return `<div class="item-row"><div class="mid"><div class="t">${esc(it.name)}</div><div class="s">${fmt(it.price)} ج لل${esc(it.unit)}${p?` · متاح ${fmt(p.stock)}`:''}</div></div>
@@ -800,7 +802,9 @@ function invItemRow(it,i){const p=prod(it.productId);return `<div class="item-ro
 <div class="amt" style="width:60px;text-align:left">${fmt(it.qty*it.price)}</div>
 <button style="color:var(--red)" onclick="invDraft.items.splice(${i},1);render()">${ic('trash',18)}</button></div>`;}
 function chQty(i,d){const it=invDraft.items[i];it.qty=Math.max(1,(+it.qty||1)+d);render();}
-function updInvTotals(){const m=invMath(invDraft);const left=Math.max(m.total-num(invDraft.paid),0);const el=$('#inv-left');if(el)el.textContent=fmt(left)+' جنيه';const s=$('#inv-sub');if(s)s.textContent=fmt(m.sub)+' جنيه';const r=$('#inv-math');if(r)r.innerHTML=invMathRows(m);}
+function invPayMath(d,m){const paid=num(d.paid);const c=d.customerId?cust(d.customerId):null;const credit=c?Math.max(-custBalance(c.id),0):0;const use=d.useCredit!==false&&credit>0;const applied=use?Math.min(credit,Math.max(m.total-paid,0)):0;const left=Math.round(Math.max(m.total-paid-applied,0)*100)/100;const over=Math.round(Math.max(paid+applied-m.total,0)*100)/100;return{paid,credit,applied,left,over,use};}
+function payLeftText(pm){return pm.left>0?(fmt(pm.left)+' جنيه'):(pm.over>0?('خالص ✓ + رصيد له '+fmt(pm.over)+' ج'):'خالص ✓');}
+function updInvTotals(){const m=invMath(invDraft);const pm=invPayMath(invDraft,m);const el=$('#inv-left');if(el)el.textContent=payLeftText(pm);const s=$('#inv-sub');if(s)s.textContent=fmt(m.sub)+' جنيه';const r=$('#inv-math');if(r)r.innerHTML=invMathRows(m);const cr=$('#inv-credit-row');if(cr)cr.style.display=pm.credit>0?'':'none';}
 function openPickProduct(){if(!DB.products.length){toast('ضيف أصناف الأول');return;}
 sheet('اختار صنف',`<div class="search" style="margin-top:0">${ic('search',18)}<input id="pp-q" placeholder="دوّر…" oninput="pickFilter(this.value)"></div><div id="pp-list">${pickListHTML('')}</div>`);setTimeout(()=>$('#pp-q')?.focus(),50);}
 function pickListHTML(q){return DB.products.filter(p=>!q||p.name.includes(q)).map(p=>`<button class="row" style="margin-bottom:6px" onclick="pickProduct('${p.id}')"><div class="mid"><div class="t">${esc(p.name)}</div><div class="s">${invDraft.priceType==='w'?fmt(p.wPrice):fmt(p.rPrice)} ج · متاح ${fmt(p.stock)} ${esc(p.unit)}</div></div>${ic('plus',18)}</button>`).join('')||'<div class="empty">مفيش نتايج</div>';}
@@ -811,24 +815,24 @@ closeSheet();render();}
 function saveInvoice(andPrint){const d=invDraft;if(!d.customerId){toast('اختار الزبون الأول');return;}
 if(!d.items.length){toast('ضيف صنف واحد على الأقل');return;}
 for(const it of d.items){const p=prod(it.productId);if(p&&it.qty>p.stock){toast(`الكمية من "${it.name}" أكبر من المتاح (${fmt(p.stock)})`);return;}}
-const m=invMath(d);const total=m.total;let paid=Math.min(num(d.paid),total);
-const inv={id:uid(),num:DB.nextNum++,date:new Date().toISOString(),customerId:d.customerId,priceType:d.priceType,items:d.items.map(it=>({...it})),discPct:m.discPct,taxPct:m.taxPct,discAmt:m.discAmt,taxAmt:m.taxAmt,total,paid};
+const m=invMath(d);const total=m.total;const pm=invPayMath(d,m);const paid=Math.round((pm.paid+pm.applied)*100)/100;
+const inv={id:uid(),num:DB.nextNum++,date:new Date().toISOString(),customerId:d.customerId,priceType:d.priceType,items:d.items.map(it=>({...it})),discPct:m.discPct,taxPct:m.taxPct,discAmt:m.discAmt,taxAmt:m.taxAmt,total,paid,creditUsed:pm.applied||0};
 d.items.forEach(it=>{const p=prod(it.productId);if(p){const b=p.stock;p.stock=Math.round((p.stock-it.qty)*100)/100;logMove(p.id,'sale',-it.qty,b,p.stock,'فاتورة #'+inv.num);}});
-DB.invoices.push(inv);if(d._draftId){DB.drafts=DB.drafts.filter(x=>x.id!==d._draftId);}save();
+DB.invoices.push(inv);if(pm.applied>0)DB.payments.push({id:uid(),kind:'in',partyType:'c',partyId:d.customerId,amount:-pm.applied,note:'خصم من رصيده في فاتورة #'+inv.num.toLocaleString(AR),date:new Date().toISOString()});if(d._draftId){DB.drafts=DB.drafts.filter(x=>x.id!==d._draftId);}save();
 const preset=d._preset;invDraft=null;
 if(andPrint){printInvoice(inv);setTimeout(()=>window.print(),80);}
-go(preset?'#/customers/'+preset:'#/');toast('الفاتورة اتحفظت ✓');}
+go(preset?'#/customers/'+preset:'#/');toast(pm.over>0?('الفاتورة اتحفظت ✓ — '+fmt(pm.over)+' ج زيادة اتحطت رصيد للزبون'):'الفاتورة اتحفظت ✓');}
 function printInvoice(inv){const c=cust(inv.customerId);$('#print-area').innerHTML=`
 <div class="p-head"><h1>${esc(DB.settings.shopName)}</h1><p>فاتورة رقم #${inv.num} · ${new Date(inv.date).toLocaleDateString(AR,{day:'numeric',month:'long',year:'numeric'})}</p><p>الزبون: ${esc(c?.name||'')} (${inv.priceType==='w'?'جملة':'قطاعي'})</p></div>
 <table class="p-items"><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>القيمة</th></tr>
 ${inv.items.map(it=>`<tr><td>${esc(it.name)}</td><td>${fmt(it.qty)} ${esc(it.unit)}</td><td>${fmt(it.price)}</td><td>${fmt(it.qty*it.price)}</td></tr>`).join('')}${inv.deliveryFee>0?`<tr><td>توصيل (دليفري)</td><td>—</td><td>—</td><td>${fmt(inv.deliveryFee)}</td></tr>`:''}</table>
-<div class="p-tot">${(inv.discAmt>0||inv.taxAmt>0)?`الإجمالي: ${fmt(Math.round((inv.items.reduce((s,it)=>s+it.qty*it.price,0)+(inv.deliveryFee||0))*100)/100)} جنيه<br>`:''}${inv.discAmt>0?`خصم ${fmt(inv.discPct)}٪: −${fmt(inv.discAmt)} جنيه<br>`:''}${inv.taxAmt>0?`ضريبة ${fmt(inv.taxPct)}٪: +${fmt(inv.taxAmt)} جنيه<br>`:''}${(inv.discAmt>0||inv.taxAmt>0)?`الصافي: ${fmt(inv.total)} جنيه<br>`:`الإجمالي: ${fmt(inv.total)} جنيه<br>`}المدفوع: ${fmt(inv.paid)} جنيه<br><b>الباقي: ${fmt(inv.total-inv.paid)} جنيه</b></div>
+<div class="p-tot">${(inv.discAmt>0||inv.taxAmt>0)?`الإجمالي: ${fmt(Math.round((inv.items.reduce((s,it)=>s+it.qty*it.price,0)+(inv.deliveryFee||0))*100)/100)} جنيه<br>`:''}${inv.discAmt>0?`خصم ${fmt(inv.discPct)}٪: −${fmt(inv.discAmt)} جنيه<br>`:''}${inv.taxAmt>0?`ضريبة ${fmt(inv.taxPct)}٪: +${fmt(inv.taxAmt)} جنيه<br>`:''}${(inv.discAmt>0||inv.taxAmt>0)?`الصافي: ${fmt(inv.total)} جنيه<br>`:`الإجمالي: ${fmt(inv.total)} جنيه<br>`}المدفوع: ${fmt(inv.paid)} جنيه${inv.creditUsed>0?` (منها ${fmt(inv.creditUsed)} ج من رصيده)`:''}<br><b>الباقي: ${fmt(Math.max(inv.total-inv.paid,0))} جنيه</b>${inv.paid>inv.total?`<br>رصيد للزبون عند المحل: ${fmt(Math.round((inv.paid-inv.total)*100)/100)} جنيه`:''}</div>
 <div class="p-foot">شكراً لتعاملكم معانا — ${esc(DB.settings.shopName)}</div>`;}
 function printInvoiceById(id){const inv=DB.invoices.find(i=>i.id===id);if(!inv)return;printInvoice(inv);setTimeout(()=>window.print(),80);}
 function printStatement(type,id){const isC=type==='c';const x=isC?cust(id):supp(id);if(!x)return;
 const bal=isC?custBalance(id):suppBalance(id);const rows=[];
 if(isC){DB.invoices.filter(i=>i.customerId===id).forEach(i=>rows.push({date:i.date,text:'فاتورة #'+i.num.toLocaleString(AR)+(i.paid>0?' (دفع منها '+fmt(i.paid)+' ج)':''),debit:i.total-i.paid,credit:0}));
-DB.payments.filter(p=>p.partyType==='c'&&p.partyId===id).forEach(p=>rows.push({date:p.date,text:'دفعة'+(p.note?' — '+p.note:''),debit:0,credit:p.amount}));}
+DB.payments.filter(p=>p.partyType==='c'&&p.partyId===id).forEach(p=>rows.push({date:p.date,text:(p.amount<0?'خصم من الرصيد':'دفعة')+(p.note?' — '+p.note:''),debit:p.amount<0?-p.amount:0,credit:p.amount<0?0:p.amount}));}
 else{DB.purchases.filter(i=>i.supplierId===id).forEach(i=>rows.push({date:i.date,text:'توريد'+(i.paid>0?' (اتدفع منه '+fmt(i.paid)+' ج)':''),debit:i.total-i.paid,credit:0}));
 DB.payments.filter(p=>p.partyType==='s'&&p.partyId===id).forEach(p=>rows.push({date:p.date,text:'دفعة'+(p.note?' — '+p.note:''),debit:0,credit:p.amount}));}
 rows.sort((a,b)=>new Date(a.date)-new Date(b.date));
@@ -836,12 +840,12 @@ $('#print-area').innerHTML=`
 <div class="p-head"><h1>${esc(DB.settings.shopName)}</h1><p>كشف حساب ${isC?'زبون':'مورد'}: ${esc(x.name)} · ${new Date().toLocaleDateString(AR,{day:'numeric',month:'long',year:'numeric'})}</p></div>
 <table class="p-items"><tr><th>التاريخ</th><th>البيان</th><th>${isC?'عليه':'له'}</th><th>${isC?'دفع':'سددنا'}</th></tr>
 ${rows.length?rows.map(r=>`<tr><td>${new Date(r.date).toLocaleDateString(AR,{day:'numeric',month:'numeric'})}</td><td>${esc(r.text)}</td><td>${r.debit?fmt(r.debit):''}</td><td>${r.credit?fmt(r.credit):''}</td></tr>`).join(''):`<tr><td colspan="4" style="text-align:center">لسه مفيش حركات</td></tr>`}</table>
-<div class="p-tot"><b>${bal>0?(isC?'الباقي عليه: ':'الباقي له: ')+fmt(bal)+' جنيه':'الحساب خالص ✓'}</b></div>
+<div class="p-tot"><b>${bal>0?(isC?'الباقي عليه: ':'الباقي له: ')+fmt(bal)+' جنيه':(bal<0&&isC?'له رصيد عند المحل: '+fmt(-bal)+' جنيه':'الحساب خالص ✓')}</b></div>
 <div class="p-foot">${esc(DB.settings.shopName)}</div>`;
 setTimeout(()=>window.print(),80);}
 /* ============ invoice drafts ============ */
 function saveInvDraft(){const d=invDraft;if(!d.items.length){toast('ضيف صنف واحد على الأقل');return;}
-const data={customerId:d.customerId||'',priceType:d.priceType,items:d.items.map(it=>({...it})),paid:d.paid||'',disc:d.disc||'',tax:d.tax||''};
+const data={customerId:d.customerId||'',priceType:d.priceType,items:d.items.map(it=>({...it})),paid:d.paid||'',disc:d.disc||'',tax:d.tax||'',useCredit:d.useCredit!==false};
 if(d._draftId){const x=DB.drafts.find(dr=>dr.id===d._draftId);if(x){Object.assign(x,data);}else{DB.drafts.push({id:d._draftId,date:new Date().toISOString(),...data});}}
 else{DB.drafts.push({id:uid(),date:new Date().toISOString(),...data});}
 save();const preset=d._preset;invDraft=null;
@@ -849,7 +853,7 @@ go(preset?'#/customers/'+preset:'#/');toast('المسودة اتحفظت ✓ —
 function draftRow(dr){const c=cust(dr.customerId);const n=dr.items.reduce((s,it)=>s+it.qty*it.price,0);
 return `<div class="row" style="cursor:pointer" onclick="openInvDraft('${dr.id}')"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('pencil')}</div><div class="mid"><div class="t">${c?esc(c.name):'من غير زبون'}</div><div class="s">${dr.items.length.toLocaleString(AR)} صنف · ${relDate(dr.date)}</div></div><div class="end"><div class="amt">${fmt(n)} <small>ج</small></div><span class="badge b-blue">مسودة</span></div><button style="color:var(--red);padding:6px" onclick="event.stopPropagation();confirmSheet('هتمسح المسودة دي. متأكد؟','امسح المسودة',()=>delDraft('${dr.id}'))">${ic('trash',18)}</button></div>`;}
 function openInvDraft(id){const x=DB.drafts.find(dr=>dr.id===id);if(!x)return;
-invDraft={customerId:x.customerId||'',priceType:x.priceType||'w',items:x.items.map(it=>({...it})),paid:x.paid||'',disc:x.disc||'',tax:x.tax||'',_preset:null,_draftId:id};
+invDraft={customerId:x.customerId||'',priceType:x.priceType||'w',items:x.items.map(it=>({...it})),paid:x.paid||'',disc:x.disc||'',tax:x.tax||'',useCredit:x.useCredit!==false,_preset:null,_draftId:id};
 if(location.hash==='#/invoice'){render();}else{go('#/invoice');}}
 function delDraft(id){DB.drafts=DB.drafts.filter(x=>x.id!==id);save();render();toast('المسودة اتمسحت');}
 /* ============ purchase (توريد) ============ */
@@ -902,7 +906,7 @@ function openPaymentSheet(kind,presetId){const isIn=kind==='in';const parties=is
 if(!parties.length){toast(isIn?'ضيف زبون الأول':'ضيف مورد الأول');return;}
 sheet(isIn?'تسجيل دفعة من زبون':'تسجيل دفعة لمورد',`
 <div class="field"><div class="lbl">${isIn?'الزبون':'المورد'}</div><select id="pay-party">
-${parties.map(x=>`<option value="${x.id}" ${x.id===presetId?'selected':''}>${esc(x.name)} — ${isIn?'عليه':'له'} ${fmt(Math.max(isIn?custBalance(x.id):suppBalance(x.id),0))} ج</option>`).join('')}</select></div>
+${parties.map(x=>{const bb=isIn?custBalance(x.id):suppBalance(x.id);const lbl=isIn?(bb>0?'عليه '+fmt(bb)+' ج':(bb<0?'له رصيد '+fmt(-bb)+' ج':'خالص')):('له '+fmt(Math.max(bb,0))+' ج');return `<option value="${x.id}" ${x.id===presetId?'selected':''}>${esc(x.name)} — ${lbl}</option>`;}).join('')}</select></div>
 <div class="field"><div class="lbl">المبلغ</div><input id="pay-amt" inputmode="decimal" placeholder="٠"></div>
 <div class="field"><div class="lbl">ملحوظة (اختياري)</div><input id="pay-note" placeholder="نقدي، فودافون كاش…"></div>
 <button class="btn btn-p" style="width:100%" onclick="savePayment('${kind}')">سجّل الدفعة ✓</button>`);
@@ -1075,7 +1079,7 @@ const rows=[...DB.purchases].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(
 return[pu.date.slice(0,10),s?s.name:'(مورد محذوف)',pu.items.map(it=>it.name+' × '+fmt(it.qty)+' '+it.unit).join(' + '),pu.total,pu.paid,pu.total-pu.paid];});
 downloadCSV('التوريدات',[['التاريخ','المورد','الأصناف','الإجمالي','المدفوع','الباقي'],...rows]);}
 function exportParties(){const rows=[['الاسم','النوع','التليفون','الرصيد']];
-DB.customers.forEach(c=>{const b=custBalance(c.id);rows.push([c.name,'زبون '+(c.type==='w'?'جملة':'قطاعي'),c.phone||'',b>0?'عليه '+b:'خالص']);});
+DB.customers.forEach(c=>{const b=custBalance(c.id);rows.push([c.name,'زبون '+(c.type==='w'?'جملة':'قطاعي'),c.phone||'',b>0?'عليه '+b:(b<0?'له رصيد '+(-b):'خالص')]);});
 DB.suppliers.forEach(s=>{const b=suppBalance(s.id);rows.push([s.name,'مورد',s.phone||'',b>0?'له '+b:'خالص']);});
 if(rows.length===1){toast('مفيش زباين ولا موردين');return;}
 downloadCSV('الأرصدة',rows);}
