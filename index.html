@@ -251,13 +251,13 @@ if(!DB.drafts)DB.drafts=[];
 function save(){localStorage.setItem(KEY,JSON.stringify(DB));}
 save();
 /* ============ قفل البرنامج (PIN) ============ */
-const PIN_KEY='mahal_pin';
-let unlocked=!localStorage.getItem(PIN_KEY);
+const PIN_KEY='mahal_pin',PIN_OK='mahal_pin_ok';
+let unlocked=!localStorage.getItem(PIN_KEY)||sessionStorage.getItem(PIN_OK)==='1';
 async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 const pinHash=pin=>sha256hex('mahal-pin-v1:'+pin);
 function vLock(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>البرنامج متقفل — اكتب رقم القفل عشان تدخل</p><input id="pin-in" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" onkeydown="if(event.key==='Enter')tryUnlock()"><button class="btn btn-p" style="width:100%;margin-top:12px" onclick="tryUnlock()">دخول</button></div></div>`;}
 async function tryUnlock(){const inp=$('#pin-in');const v=(inp&&inp.value||'').trim();if(!v)return;
-if(await pinHash(v)===localStorage.getItem(PIN_KEY)){unlocked=true;render();}else{toast('القفل غلط، حاول تاني');inp.value='';inp.focus();}}
+if(await pinHash(v)===localStorage.getItem(PIN_KEY)){unlocked=true;sessionStorage.setItem(PIN_OK,'1');render();}else{toast('القفل غلط، حاول تاني');inp.value='';inp.focus();}}
 function openPinSheet(mode){const has=!!localStorage.getItem(PIN_KEY);
 if(mode==='set'||mode==='change'){sheet(has?'تغيير قفل البرنامج':'قفل البرنامج',`
 <p style="font-size:12.5px;color:var(--muted);font-weight:600;text-align:center;margin-bottom:12px">${has?'اكتب القفل الحالي الأول، وبعدين القفل الجديد':'اختار رقم قفل (٤ أرقام أو أكتر) — هيتطلب كل ما تفتح البرنامج'}</p>
@@ -272,10 +272,10 @@ async function doSetPin(has){const n1=($('#pin-new')||{}).value||'';const n2=($(
 if(n1.trim().length<4){toast('القفل لازم يكون ٤ حروف أو أرقام على الأقل');return;}
 if(n1!==n2){toast('التأكيد مش مطابق للقفل الجديد');return;}
 if(has){const old=($('#pin-old')||{}).value||'';if(await pinHash(old)!==localStorage.getItem(PIN_KEY)){toast('القفل الحالي غلط');return;}}
-localStorage.setItem(PIN_KEY,await pinHash(n1.trim()));closeSheet();render();toast('القفل اتحفظ ✓');}
+localStorage.setItem(PIN_KEY,await pinHash(n1.trim()));sessionStorage.setItem(PIN_OK,'1');closeSheet();render();toast('القفل اتحفظ ✓');}
 async function doRemovePin(){const old=($('#pin-old')||{}).value||'';
 if(await pinHash(old)!==localStorage.getItem(PIN_KEY)){toast('القفل غلط');return;}
-localStorage.removeItem(PIN_KEY);closeSheet();render();toast('القفل اتشال ✓');}
+localStorage.removeItem(PIN_KEY);sessionStorage.removeItem(PIN_OK);closeSheet();render();toast('القفل اتشال ✓');}
 /* ============ صور الأصناف (تخزين محلي IndexedDB) ============ */
 const PHOTOS={
  db:null,
@@ -331,6 +331,7 @@ async pushProducts(){await this.login();
  return rows.length;},
 async fetchOrders(){await this.login();return await this.req('orders?order=created_at.desc&limit=100');},
 async setOrderStatus(id,st){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:st})});}
+async deleteOrder(id){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'DELETE'});}
 };
 let shopOrders=null,shopOrdersErr=false,shopOrdersAt=0;
 async function syncShopNow(){if(!SB.ready()){toast('حط بيانات المتجر الأول من الإعدادات');return;}
@@ -341,6 +342,10 @@ try{shopOrders=await SB.fetchOrders();shopOrdersErr=false;}catch(e){shopOrdersEr
 shopOrdersAt=Date.now();
 if(!quiet){render();}else{const sec=$('#shop-sec');if(sec)sec.innerHTML=shopSectionHTML();}}
 async function markOrder(id,st){try{await SB.setOrderStatus(id,st);(shopOrders||[]).forEach(o=>{if(String(o.id)===String(id))o.status=st;});render();toast(st==='done'?'الطلب اتقفل ✓':'الطلب اتلغى');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
+function delOrder(id){sheet('مسح الطلب',`<div class="alert" style="margin-top:0;background:var(--red-soft);border-color:#EFC9C5"><span style="color:var(--red)">${ic('alert')}</span><div class="tx" style="color:var(--red)">الطلب هيتمسح نهائي ومش هيقدر يرجع تاني. لو عايز تخبيه من غير مسح، اختار «إلغاء» بدلها.</div></div>
+<button class="btn btn-p" style="background:var(--red);width:100%" onclick="delOrderGo('${id}')">امسح نهائي</button>
+<button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="closeSheet()">ارجع</button>`);}
+async function delOrderGo(id){closeSheet();try{await SB.deleteOrder(id);shopOrders=(shopOrders||[]).filter(o=>String(o.id)!==String(id));render();toast('الطلب اتمسح نهائي ✓');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
 function newOrdersCount(){return (shopOrders||[]).filter(o=>o.status==='new').length;}
 function shopSectionHTML(){if(!SB.ready())return '';const n=newOrdersCount();let orderRow;
 if(shopOrders===null)orderRow=`<button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block">بنجهّز الطلبات…</span></span></button>`;
@@ -358,7 +363,7 @@ else if(shopOrders===null){body=`<div class="empty">بنحمّل الطلبات�
 else if(!shopOrders.length){body=`<div class="empty"><div class="big">مفيش طلبات لسه</div>أول ما زبون يطلب من المتجر هيظهر هنا</div>`;}
 else{body=shopOrders.map(o=>{const items=(o.items||[]).map(it=>`${esc(it.name)} × ${fmt(it.qty)}`).join('، ');
 const wa=o.phone?waLink(o.phone,'أهلاً '+o.customer_name+'، بخصوص طلبك من '+DB.settings.shopName):null;
-return `<div class="ord${o.status!=='new'?' done':''}"><div class="oh"><div class="onm">${esc(o.customer_name)}</div><span class="badge ${o.status==='new'?'b-amber':o.status==='done'?'b-green':'b-red'}">${o.status==='new'?'جديد':o.status==='done'?'تم ✓':'ملغي'}</span></div><div class="otm">${relDate(o.created_at)} · ${new Date(o.created_at).toLocaleTimeString(AR,{hour:'numeric',minute:'2-digit'})}</div><div class="oit">${items}</div>${o.note?`<div class="ont">ملاحظة: ${esc(o.note)}</div>`:''}<div class="oh" style="margin-top:8px"><div class="amt" style="font-weight:800">${fmt(o.total)} <small style="font-size:10.5px;color:var(--muted)">${esc(DB.settings.currency||'جنيه')}</small></div>${o.phone?`<div class="otm" style="direction:ltr">${esc(o.phone)}</div>`:''}</div>${o.status==='new'?`<div class="obt"><button class="ob-ok" onclick="markOrder('${o.id}','done')">تم ✓</button>${wa?`<a class="ob-wa" href="${wa}" target="_blank" rel="noopener">${ic('wa',15)} واتساب</a>`:''}<button class="ob-no" onclick="markOrder('${o.id}','cancelled')">إلغاء</button></div>`:''}</div>`;}).join('');}
+return `<div class="ord${o.status!=='new'?' done':''}"><div class="oh"><div class="onm">${esc(o.customer_name)}</div><span class="badge ${o.status==='new'?'b-amber':o.status==='done'?'b-green':'b-red'}">${o.status==='new'?'جديد':o.status==='done'?'تم ✓':'ملغي'}</span></div><div class="otm">${relDate(o.created_at)} · ${new Date(o.created_at).toLocaleTimeString(AR,{hour:'numeric',minute:'2-digit'})}</div><div class="oit">${items}</div>${o.note?`<div class="ont">ملاحظة: ${esc(o.note)}</div>`:''}<div class="oh" style="margin-top:8px"><div class="amt" style="font-weight:800">${fmt(o.total)} <small style="font-size:10.5px;color:var(--muted)">${esc(DB.settings.currency||'جنيه')}</small></div>${o.phone?`<div class="otm" style="direction:ltr">${esc(o.phone)}</div>`:''}</div>${o.status==='new'?`<div class="obt"><button class="ob-ok" onclick="markOrder('${o.id}','done')">تم ✓</button>${wa?`<a class="ob-wa" href="${wa}" target="_blank" rel="noopener">${ic('wa',15)} واتساب</a>`:''}<button class="ob-no" onclick="markOrder('${o.id}','cancelled')">إلغاء</button><button class="ob-no" onclick="delOrder('${o.id}')">مسح</button></div>`:`<div class="obt"><button class="ob-no" onclick="delOrder('${o.id}')">مسح الطلب</button></div>`}</div>`;}).join('');}
 return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">طلبات المتجر</div></div></div>
 <div class="content">${body}</div>`+navbar('home');}
 /* ============ derived ============ */
