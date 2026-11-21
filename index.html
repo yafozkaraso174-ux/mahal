@@ -473,8 +473,8 @@ async function pullUsers(){SB.load();if(!(SB.cfg.url||SB_DEF.url))return false;u
  for(const r of rows){const lu=DB.users.find(x=>String(x.id)===String(r.id));
   const rem={id:r.id,name:r.name,pinH:r.pin_h,owner:!!r.owner,active:!!r.active,perms:r.perms||{},upd:r.updated_at||''};
   if(!lu){DB.users.push(rem);changed=true;}
-  else if((r.updated_at||'')>(lu.upd||'')){Object.assign(lu,rem);changed=true;}
-  else if((lu.upd||'')>(r.updated_at||'')){needPush=true;}}
+  else if((Date.parse(r.updated_at)||0)>(Date.parse(lu.upd)||0)){Object.assign(lu,rem);changed=true;}
+  else if((Date.parse(lu.upd)||0)>(Date.parse(r.updated_at)||0)){needPush=true;}}
  if(DB.users.some(u=>!remoteIds.includes(String(u.id))))needPush=true;
  if(changed){save();
   if(curUser){const still=DB.users.find(x=>x.id===curUser.id&&x.active);if(still)curUser=still;else{curUser=null;sessionStorage.removeItem('mahal_cur');}}}
