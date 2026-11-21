@@ -242,3 +242,106 @@ create policy "owner write product photos" on storage.objects for all to authent
   with check (bucket_id = 'product-photos' and auth.uid() = (select id from auth.users order by created_at asc limit 1));
 
 -- قراءة الأصناف وبيانات المحل وإرسال الطلبات للزباين زي ما هي (مش متأثرة)
+
+-- ============================================================
+-- محلّي — جولة تأمين ٢ (٢٠٢٦-١١-٢١)
+-- ١) إصلاح سياسات الصلاحيات (كانت بتقرأ auth.users جوه السياسة وده بيفشل بخطأ صلاحيات عند التنفيذ — وده سبب إن رفع اللابتوب اترفض)
+-- ٢) عداد محاولات الرقم السري بقى متسلسل ومش بيتمدد
+-- شغّل الملف ده كله مرة واحدة في SQL Editor — آمن يتشغل أكتر من مرة
+-- ============================================================
+
+-- ١) دالة بتجاوب: هل اللي بيكلمنا هو حساب المالك؟
+--    بتشتغل بصلاحيات قاعدة البيانات نفسها (security definer) عشان تقدر تقرأ auth.users
+--    من غير ما ندي أي حد صلاحية عليه. مفيش أي grant جديد على auth.users.
+create or replace function public.is_shop_owner()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    auth.uid() = (select id from auth.users order by created_at asc limit 1),
+    false
+  );
+$$;
+revoke all on function public.is_shop_owner() from public;
+grant execute on function public.is_shop_owner() to anon;
+grant execute on function public.is_shop_owner() to authenticated;
+
+-- ٢) إعادة بناء كل سياسات المالك على الدالة الجديدة
+drop policy if exists "owner all shop_users" on shop_users;
+create policy "owner all shop_users" on shop_users for all to authenticated
+  using (public.is_shop_owner()) with check (public.is_shop_owner());
+
+drop policy if exists "owner all backups" on backups;
+create policy "owner all backups" on backups for all to authenticated
+  using (public.is_shop_owner()) with check (public.is_shop_owner());
+
+drop policy if exists "owner all orders" on orders;
+create policy "owner all orders" on orders for all to authenticated
+  using (public.is_shop_owner()) with check (public.is_shop_owner());
+
+drop policy if exists "owner all products" on products;
+create policy "owner all products" on products for all to authenticated
+  using (public.is_shop_owner()) with check (public.is_shop_owner());
+
+drop policy if exists "owner all shop_info" on shop_info;
+create policy "owner all shop_info" on shop_info for all to authenticated
+  using (public.is_shop_owner()) with check (public.is_shop_owner());
+
+drop policy if exists "owner write product photos" on storage.objects;
+create policy "owner write product photos" on storage.objects for all to authenticated
+  using (bucket_id = 'product-photos' and public.is_shop_owner())
+  with check (bucket_id = 'product-photos' and public.is_shop_owner());
+
+-- ٣) verify_pin بنسخة أقوى:
+--    - قفل تسلسلي لكل حساب: محاولتين في نفس اللحظة بيتعدوا مرة واحدة بس
+--    - مدة القفل ثابتة: اللي بيحاول وهو مقفول مش بيمدد القفل
+create or replace function verify_pin(p_id text, p_pin text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  stored text;
+  fails_now int;
+  win timestamptz;
+begin
+  -- تسلسل المحاولات لكل حساب جوه نفس العملية
+  perform pg_advisory_xact_lock(hashtext(p_id));
+
+  select pin_h into stored from shop_users where id = p_id and active;
+  if stored is null then perform pg_sleep(0.3); return false; end if;
+
+  insert into pin_attempts (user_id, fails, window_start) values (p_id, 0, now())
+  on conflict (user_id) do nothing;
+  select fails, window_start into fails_now, win from pin_attempts where user_id = p_id;
+
+  -- عدّت العشر دقايق؟ صفّر العداد
+  if now() - win > interval '10 minutes' then
+    update pin_attempts set fails = 0, window_start = now() where user_id = p_id;
+    fails_now := 0;
+  end if;
+
+  -- مقفول (٥ محاولات غلط جوه العشر دقايق): ارفض من غير ما تمدد القفل
+  if fails_now >= 5 then perform pg_sleep(0.3); return false; end if;
+
+  if stored = encode(digest('mahal-pin-v1:' || p_pin, 'sha256'), 'hex') then
+    update pin_attempts set fails = 0, window_start = now() where user_id = p_id;
+    return true;
+  else
+    update pin_attempts set fails = fails + 1 where user_id = p_id;
+    perform pg_sleep(0.3);
+    return false;
+  end if;
+end;
+$$;
+revoke all on function verify_pin(text, text) from public;
+grant execute on function verify_pin(text, text) to anon;
+grant execute on function verify_pin(text, text) to authenticated;
+
+-- قراءة الأصناف وبيانات المحل وإرسال الطلبات للزباين زي ما هي (مش متأثرة)
+-- قائمة shop_users_public العامة زي ما هي: id والاسم والحالة والصلاحيات ووقت التحديث بس
+-- (محتاجينها لشاشة الدخول والمزامنة — هاش الرقم السري مش فيها)
