@@ -330,7 +330,7 @@ async pushProducts(){await this.login();
  if(liveIds.length){await this.req('products?id=not.in.('+liveIds.map(encodeURIComponent).join(',')+')',{method:'DELETE'});}
  return rows.length;},
 async fetchOrders(){await this.login();return await this.req('orders?order=created_at.desc&limit=100');},
-async setOrderStatus(id,st){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:st})});}
+async setOrderStatus(id,st){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:st})});},
 async deleteOrder(id){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'DELETE'});}
 };
 let shopOrders=null,shopOrdersErr=false,shopOrdersAt=0;
