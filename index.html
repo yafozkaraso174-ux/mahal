@@ -127,6 +127,25 @@ button.row{cursor:pointer}
 @keyframes pop{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .set-row{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px;display:flex;align-items:center;gap:11px;margin-bottom:8px;width:100%;text-align:right;font-size:13.5px;font-weight:800}
 .set-row .s{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:2px}
+.lockwrap{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:var(--bg)}
+.lockcard{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px 20px;width:100%;max-width:340px;text-align:center}
+.lockcard .lk{width:56px;height:56px;border-radius:20px;background:var(--green-soft);color:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 10px}
+.lockcard h2{font-size:18px;font-weight:800}
+.lockcard p{font-size:12.5px;color:var(--muted);margin:5px 0 16px;font-weight:600}
+.lockcard input{width:100%;background:#F7F3EA;border:1px solid var(--line);border-radius:14px;padding:13px;font-size:20px;font-weight:800;text-align:center;letter-spacing:6px;outline:none;color:var(--ink)}
+.lockcard input:focus{border-color:var(--green)}
+.ord{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:10px}
+.ord .oh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ord .onm{font-size:14px;font-weight:800}
+.ord .otm{font-size:11px;color:var(--muted);font-weight:600}
+.ord .oit{font-size:12.5px;color:var(--ink);margin-top:8px;line-height:1.9;font-weight:600}
+.ord .ont{font-size:12px;color:var(--muted);margin-top:6px;font-weight:600}
+.ord .obt{display:flex;gap:8px;margin-top:10px}
+.ord .obt button{flex:1;border-radius:10px;padding:9px 0;font-size:12px;font-weight:800}
+.ord .ob-ok{background:var(--green);color:#fff}
+.ord .ob-no{background:var(--red-soft);color:var(--red)}
+.ord .ob-wa{background:var(--green-soft);color:var(--green);text-decoration:none;display:flex;align-items:center;justify-content:center;gap:4px}
+.ord.done{opacity:.6}
 #print-area{display:none}
 @media print{
   body>*{display:none!important}
@@ -187,6 +206,10 @@ download:'<path d="M12 4v12"/><path d="m6.5 10.5 5.5 5.5 5.5-5.5"/><path d="M4 2
 check:'<path d="m4.5 12.5 5 5L19.5 7"/>',
 phone:'<path d="M6.8 3.5c.6 0 2.3 3.2 2.3 3.9 0 1.1-1.6 1.7-1.6 2.8 0 1.6 2.7 4.7 4.9 4.7 1.1 0 1.5-1.6 2.7-1.6.7 0 3.8 1.9 3.8 2.5 0 2.1-1.9 4-3.9 4-5.4 0-12-6.4-12-12.3 0-2.1 1.7-4 3.8-4z"/>',
 x:'<path d="M6 6l12 12M18 6 6 18"/>',
+lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
+store:'<path d="M4 9.5 5.5 4h13L20 9.5"/><path d="M4 9.5a2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0"/><path d="M5.5 11.5V20h13v-8.5"/><path d="M9.5 20v-5h5v5"/>',
+copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+wa:'<path d="M21 11.8a8.3 8.3 0 0 1-8.4 8.2c-1.4 0-2.8-.3-4-1L3 20.4l1.5-5A8.3 8.3 0 1 1 21 11.8z"/>',
 };
 const ic=(n,s)=>`<svg class="i"${s?` style="width:${s}px;height:${s}px"`:''} viewBox="0 0 24 24">${IC[n]||''}</svg>`;
 const catIcon=c=>c==='زيوت وسمنة'?'barrel':(c==='فول وبقوليات'?'sack':'box');
@@ -222,6 +245,79 @@ if(!DB.nextNum)DB.nextNum=1001;
 if(!DB.drafts)DB.drafts=[];
 function save(){localStorage.setItem(KEY,JSON.stringify(DB));}
 save();
+/* ============ قفل البرنامج (PIN) ============ */
+const PIN_KEY='mahal_pin';
+let unlocked=!localStorage.getItem(PIN_KEY);
+async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+const pinHash=pin=>sha256hex('mahal-pin-v1:'+pin);
+function vLock(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>البرنامج متقفل — اكتب رقم القفل عشان تدخل</p><input id="pin-in" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" onkeydown="if(event.key==='Enter')tryUnlock()"><button class="btn btn-p" style="width:100%;margin-top:12px" onclick="tryUnlock()">دخول</button></div></div>`;}
+async function tryUnlock(){const inp=$('#pin-in');const v=(inp&&inp.value||'').trim();if(!v)return;
+if(await pinHash(v)===localStorage.getItem(PIN_KEY)){unlocked=true;render();}else{toast('القفل غلط، حاول تاني');inp.value='';inp.focus();}}
+function openPinSheet(mode){const has=!!localStorage.getItem(PIN_KEY);
+if(mode==='set'||mode==='change'){sheet(has?'تغيير قفل البرنامج':'قفل البرنامج',`
+<p style="font-size:12.5px;color:var(--muted);font-weight:600;text-align:center;margin-bottom:12px">${has?'اكتب القفل الحالي الأول، وبعدين القفل الجديد':'اختار رقم قفل (٤ أرقام أو أكتر) — هيتطلب كل ما تفتح البرنامج'}</p>
+${has?'<div class="field"><div class="lbl">القفل الحالي</div><input id="pin-old" type="password" inputmode="numeric" autocomplete="off"></div>':''}
+<div class="field"><div class="lbl">القفل الجديد</div><input id="pin-new" type="password" inputmode="numeric" autocomplete="off"></div>
+<div class="field"><div class="lbl">تأكيد القفل الجديد</div><input id="pin-new2" type="password" inputmode="numeric" autocomplete="off"></div>
+<button class="btn btn-p" style="width:100%" onclick="doSetPin(${has?1:0})">${has?'غيّر القفل ✓':'فعّل القفل ✓'}</button>`);}
+else if(mode==='remove'){sheet('شيل قفل البرنامج',`
+<div class="field"><div class="lbl">اكتب القفل الحالي للتأكيد</div><input id="pin-old" type="password" inputmode="numeric" autocomplete="off"></div>
+<button class="btn btn-p" style="background:var(--red);width:100%" onclick="doRemovePin()">شيل القفل</button>`);}}
+async function doSetPin(has){const n1=($('#pin-new')||{}).value||'';const n2=($('#pin-new2')||{}).value||'';
+if(n1.trim().length<4){toast('القفل لازم يكون ٤ حروف أو أرقام على الأقل');return;}
+if(n1!==n2){toast('التأكيد مش مطابق للقفل الجديد');return;}
+if(has){const old=($('#pin-old')||{}).value||'';if(await pinHash(old)!==localStorage.getItem(PIN_KEY)){toast('القفل الحالي غلط');return;}}
+localStorage.setItem(PIN_KEY,await pinHash(n1.trim()));closeSheet();render();toast('القفل اتحفظ ✓');}
+async function doRemovePin(){const old=($('#pin-old')||{}).value||'';
+if(await pinHash(old)!==localStorage.getItem(PIN_KEY)){toast('القفل غلط');return;}
+localStorage.removeItem(PIN_KEY);closeSheet();render();toast('القفل اتشال ✓');}
+/* ============ المتجر الإلكتروني (Supabase) ============ */
+const SB={
+key:'mahal_shop_cfg',cfg:null,token:null,tokenExp:0,
+load(){if(this.cfg)return;try{this.cfg=JSON.parse(localStorage.getItem(this.key))||{};}catch(e){this.cfg={};}},
+save(){localStorage.setItem(this.key,JSON.stringify(this.cfg||{}));},
+ready(){this.load();return !!(this.cfg.url&&this.cfg.anon);},
+async login(){this.load();if(this.token&&Date.now()<this.tokenExp)return;
+ if(!this.cfg.email||!this.cfg.pass)throw new Error('no-auth');
+ const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':this.cfg.anon,'Content-Type':'application/json'},body:JSON.stringify({email:this.cfg.email,password:this.cfg.pass})});
+ if(!r.ok)throw new Error('auth-failed');const j=await r.json();this.token=j.access_token;this.tokenExp=Date.now()+((j.expires_in||3600)-120)*1000;},
+async req(path,opt){opt=opt||{};this.load();const h=Object.assign({'apikey':this.cfg.anon,'Authorization':'Bearer '+(this.token||this.cfg.anon)},opt.headers||{});
+ const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/rest/v1/'+path,Object.assign({},opt,{headers:h}));
+ if(!r.ok)throw new Error('req-failed:'+r.status);if(r.status===204)return null;const t=await r.text();return t?JSON.parse(t):null;},
+async pushProducts(){await this.login();
+ const rows=DB.products.map(p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,stock:p.stock,updated_at:new Date().toISOString()}));
+ await this.req('products',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
+ const info=[{id:1,shop_name:DB.settings.shopName,owner_name:DB.settings.ownerName||'',phone:DB.settings.phone||'',updated_at:new Date().toISOString()}];
+ await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});
+ const liveIds=DB.products.map(p=>p.id);
+ if(liveIds.length){await this.req('products?id=not.in.('+liveIds.map(encodeURIComponent).join(',')+')',{method:'DELETE'});}
+ return rows.length;},
+async fetchOrders(){await this.login();return await this.req('orders?order=created_at.desc&limit=100');},
+async setOrderStatus(id,st){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:st})});}
+};
+let shopOrders=null,shopOrdersErr=false,shopOrdersAt=0;
+async function syncShopNow(){if(!SB.ready()){toast('حط بيانات المتجر الأول من الإعدادات');return;}
+toast('بنزّل الأصناف على المتجر…');
+try{const n=await SB.pushProducts();toast('اتنزّل '+n.toLocaleString(AR)+' صنف على المتجر ✓');}catch(e){toast(e.message==='auth-failed'?'الإيميل أو الباسورد غلط':'في مشكلة في الاتصال — جرب تاني');}}
+async function refreshOrders(quiet){if(!SB.ready()){shopOrders=null;return;}
+try{shopOrders=await SB.fetchOrders();shopOrdersErr=false;}catch(e){shopOrdersErr=true;}
+shopOrdersAt=Date.now();
+if(!quiet){render();}else{const sec=$('#shop-sec');if(sec)sec.innerHTML=shopSectionHTML();}}
+async function markOrder(id,st){try{await SB.setOrderStatus(id,st);(shopOrders||[]).forEach(o=>{if(String(o.id)===String(id))o.status=st;});render();toast(st==='done'?'الطلب اتقفل ✓':'الطلب اتلغى');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
+function newOrdersCount(){return (shopOrders||[]).filter(o=>o.status==='new').length;}
+function shopSectionHTML(){if(!SB.ready())return '';const n=newOrdersCount();
+if(shopOrders===null)return `<div class="sec-title">المتجر الإلكتروني</div><button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block">بنجهّز الطلبات…</span></span></button>`;
+if(shopOrdersErr)return `<div class="sec-title">المتجر الإلكتروني</div><button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block;color:var(--red)">مفيش اتصال دلوقتي — هنحاول تاني لما تفتح الطلبات</span></span></button>`;
+return `<div class="sec-title">المتجر الإلكتروني</div><button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block">${n?('عندك '+n.toLocaleString(AR)+' طلب جديد مستني'):'مفيش طلبات جديدة'}</span></span>${n?`<span class="badge b-red" style="font-size:12px">${n.toLocaleString(AR)}</span>`:''}</button>`;}
+function vOrders(){let body;
+if(!SB.ready()){body=`<div class="empty"><div class="big">المتجر لسه متوصلش</div>حط بيانات المتجر من الإعدادات الأول</div><button class="btn btn-p" style="width:100%" onclick="go('#/settings')">روح للإعدادات</button>`;}
+else if(shopOrders===null){body=`<div class="empty">بنحمّل الطلبات…</div>`;setTimeout(()=>refreshOrders(false),50);}
+else if(!shopOrders.length){body=`<div class="empty"><div class="big">مفيش طلبات لسه</div>أول ما زبون يطلب من المتجر هيظهر هنا</div>`;}
+else{body=shopOrders.map(o=>{const items=(o.items||[]).map(it=>`${esc(it.name)} × ${fmt(it.qty)}`).join('، ');
+const wa=o.phone?waLink(o.phone,'أهلاً '+o.customer_name+'، بخصوص طلبك من '+DB.settings.shopName):null;
+return `<div class="ord${o.status!=='new'?' done':''}"><div class="oh"><div class="onm">${esc(o.customer_name)}</div><span class="badge ${o.status==='new'?'b-amber':o.status==='done'?'b-green':'b-red'}">${o.status==='new'?'جديد':o.status==='done'?'تم ✓':'ملغي'}</span></div><div class="otm">${relDate(o.created_at)} · ${new Date(o.created_at).toLocaleTimeString(AR,{hour:'numeric',minute:'2-digit'})}</div><div class="oit">${items}</div>${o.note?`<div class="ont">ملاحظة: ${esc(o.note)}</div>`:''}<div class="oh" style="margin-top:8px"><div class="amt" style="font-weight:800">${fmt(o.total)} <small style="font-size:10.5px;color:var(--muted)">${esc(DB.settings.currency||'جنيه')}</small></div>${o.phone?`<div class="otm" style="direction:ltr">${esc(o.phone)}</div>`:''}</div>${o.status==='new'?`<div class="obt"><button class="ob-ok" onclick="markOrder('${o.id}','done')">تم ✓</button>${wa?`<a class="ob-wa" href="${wa}" target="_blank" rel="noopener">${ic('wa',15)} واتساب</a>`:''}<button class="ob-no" onclick="markOrder('${o.id}','cancelled')">إلغاء</button></div>`:''}</div>`;}).join('');}
+return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">طلبات المتجر</div></div></div>
+<div class="content">${body}</div>`+navbar('home');}
 /* ============ derived ============ */
 const prod=id=>DB.products.find(p=>p.id===id);
 const cust=id=>DB.customers.find(c=>c.id===id);
@@ -274,6 +370,7 @@ return appbar(greeting(),esc(DB.settings.shopName),gearBtn())+`
  <button class="act" onclick="go('#/purchase')"><div class="ic" style="background:var(--amber-soft);color:#9A6A14">${ic('down')}</div><div class="tx">توريد بضاعة</div></button>
  <button class="act" onclick="openProductSheet()"><div class="ic" style="background:var(--red-soft);color:var(--red)">${ic('tag')}</div><div class="tx">صنف جديد</div></button>
 </div>
+${SB.ready()?`<div id="shop-sec">${shopSectionHTML()}</div>`:''}
 ${low.length?`<div class="alert"><span style="color:#9A6A14">${ic('alert')}</span><div class="tx">${low.slice(0,3).map(p=>`<b>${esc(p.name)}</b> باقي منه ${fmt(p.stock)} ${esc(p.unit)}`).join(' · ')} — عاوز تطلب توريد؟</div></div>`:''}
 ${drafts.length?`<div class="sec-title">مسودات فواتير</div>${drafts.map(draftRow).join('')}`:''}
 <div class="sec-title">آخر الحركات</div>
@@ -531,11 +628,41 @@ save();closeSheet();
 if(fromInvoice){if(isC&&invDraft){invDraft.customerId=id;const c=cust(id);if(c)invDraft.priceType=c.type;}if(!isC&&purDraft){purDraft.supplierId=id;}}
 render();toast('اتحفظ ✓');}
 /* ============ settings ============ */
+function storeUrl(){return (location.origin||'')+String(location.pathname||'/').replace(/[^/]*$/,'')+'store.html';}
+function shopSettingsHTML(){SB.load();const c=SB.cfg||{};const sUrl=storeUrl();
+if(!SB.ready()){return `<div class="set-row" style="cursor:default"><span style="font-weight:600;color:var(--muted);font-size:12px;line-height:1.8">حط بيانات مشروع Supabase هنا مرة واحدة، والمتجر هيشتغل لوحده. البيانات دي بتتخزن على جهازك بس.</span></div>
+<div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||'')}" placeholder="https://xxxx.supabase.co" style="direction:ltr;text-align:left" autocomplete="off"></div>
+<div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
+<div class="field"><div class="lbl">إيميل حساب سوبابيز بتاعك</div><input id="sb-email" value="${esc(c.email||'')}" autocomplete="off" style="direction:ltr;text-align:left"></div>
+<div class="field"><div class="lbl">باسورد سوبابيز</div><input id="sb-pass" value="${esc(c.pass||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
+<button class="btn btn-p" style="width:100%" onclick="saveShopCfg()">حفظ بيانات المتجر ✓</button>`;}
+return `<div class="set-row" style="cursor:default">${ic('store')}<span>المتجر شغال<span class="s" style="display:block;direction:ltr;text-align:right">${esc(sUrl)}</span></span><button class="cbtn" style="flex:0 0 64px;background:var(--green-soft);color:var(--green)" onclick="copyStoreLink()">${ic('copy',14)} نسخ</button></div>
+<button class="set-row" onclick="syncShopNow()">${ic('upload')}<span>نزّل الأصناف على المتجر<span class="s" style="display:block">حدّث الأسعار والكميات واسم المحل عند الزباين</span></span></button>
+<button class="set-row" onclick="go('#/orders')">${ic('receipt')}<span>طلبات المتجر<span class="s" style="display:block">شوف الطلبات الجديدة واقفلها</span></span></button>
+<button class="set-row" onclick="sheet('بيانات المتجر',document.getElementById('sb-cfg-tpl').innerHTML)">${ic('gear')}<span>تعديل بيانات الاتصال</span></button>
+<template id="sb-cfg-tpl">
+<div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||'')}" style="direction:ltr;text-align:left" autocomplete="off"></div>
+<div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
+<div class="field"><div class="lbl">إيميل حساب سوبابيز</div><input id="sb-email" value="${esc(c.email||'')}" autocomplete="off" style="direction:ltr;text-align:left"></div>
+<div class="field"><div class="lbl">باسورد سوبابيز</div><input id="sb-pass" value="${esc(c.pass||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
+<button class="btn btn-p" style="width:100%" onclick="saveShopCfg()">حفظ ✓</button>
+</template>`;}
+function saveShopCfg(){SB.cfg={url:($('#sb-url')||{}).value.trim(),anon:($('#sb-anon')||{}).value.trim(),email:($('#sb-email')||{}).value.trim(),pass:($('#sb-pass')||{}).value};
+SB.save();SB.token=null;shopOrders=null;shopOrdersAt=0;closeSheet();render();toast('بيانات المتجر اتحفظت ✓');}
+function copyStoreLink(){const u=storeUrl();
+const done=()=>toast('اللينك اتنسخ ✓ — ابعته لزباينك');
+if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(done).catch(()=>{prompt('انسخ اللينك ده:',u);});}else{prompt('انسخ اللينك ده:',u);}}
 function vSettings(){return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">الإعدادات</div></div></div>
 <div class="content">
 <div class="field"><div class="lbl">اسم المحل</div><input id="st-shop" value="${esc(DB.settings.shopName)}"></div>
 <div class="field"><div class="lbl">اسمك (للتحية في الرئيسية)</div><input id="st-owner" value="${esc(DB.settings.ownerName||'')}" placeholder="الحاج محمود"></div>
-<button class="btn btn-p" style="width:100%" onclick="DB.settings.shopName=$('#st-shop').value.trim()||'محلي';DB.settings.ownerName=$('#st-owner').value.trim();save();render();toast('اتحفظ ✓')">حفظ ✓</button>
+<div class="field"><div class="lbl">موبايل المحل (واتساب — بيظهر للزباين في المتجر)</div><input id="st-phone" value="${esc(DB.settings.phone||'')}" placeholder="01xxxxxxxxx" inputmode="tel" style="direction:ltr;text-align:right"></div>
+<button class="btn btn-p" style="width:100%" onclick="DB.settings.shopName=$('#st-shop').value.trim()||'محلي';DB.settings.ownerName=$('#st-owner').value.trim();DB.settings.phone=$('#st-phone').value.trim();save();render();toast('اتحفظ ✓')">حفظ ✓</button>
+<div class="sec-title">قفل البرنامج</div>
+${localStorage.getItem(PIN_KEY)?`<button class="set-row" onclick="openPinSheet('change')">${ic('lock')}<span>غيّر رقم القفل<span class="s" style="display:block">البرنامج متقفل — بيتفتح برقمك بس</span></span></button>
+<button class="set-row" style="color:var(--red)" onclick="openPinSheet('remove')">${ic('x')}<span>شيل القفل</span></button>`:`<button class="set-row" onclick="openPinSheet('set')">${ic('lock')}<span>اقفل البرنامج برقم<span class="s" style="display:block">كل ما تفتح البرنامج هيطلب الرقم — تأمين لبياناتك لو حد مسك الموبايل</span></span></button>`}
+<div class="sec-title">المتجر الإلكتروني</div>
+${shopSettingsHTML()}
 <div class="sec-title">النسخ الاحتياطي</div>
 <button class="set-row" onclick="exportData()">${ic('download')}<span>نزّل نسخة احتياطية<span class="s" style="display:block">ملف فيه كل بياناتك — نزّله كل فترة وابعته لنفسك واتساب</span></span></button>
 <button class="set-row" onclick="document.getElementById('imp-file').click()">${ic('upload')}<span>رجّع نسخة احتياطية<span class="s" style="display:block">لو غيرت الموبايل أو مسحت المتصفح</span></span></button>
@@ -587,6 +714,7 @@ downloadCSV('الأرصدة',rows);}
 /* ============ router ============ */
 function go(h){location.hash=h;}
 function render(){const h=location.hash||'#/';const app=$('#app');
+if(!unlocked){app.innerHTML=vLock();return;}
 let html;
 if(h==='#/'||h==='#'){closeSheet();html=vDash();}
 else if(h==='#/products'){html=vProducts();}
@@ -599,10 +727,12 @@ else if(h.startsWith('#/invoice/')){html=vInvoice(h.split('/')[2]);}
 else if(h==='#/purchase'){html=vPurchase(null);}
 else if(h.startsWith('#/purchase/')){html=vPurchase(h.split('/')[2]);}
 else if(h==='#/settings'){html=vSettings();}
+else if(h==='#/orders'){html=vOrders();}
 else{html=vDash();}
-app.innerHTML=html;window.scrollTo(0,0);}
-window.addEventListener('hashchange',render);
-render();
+app.innerHTML=html;window.scrollTo(0,0);
+if((h==='#/'||h==='#')&&SB.ready()&&Date.now()-shopOrdersAt>60000){refreshOrders(true);}}
+window.addEventListener('hashchange',()=>{if(unlocked)render();});
+if(unlocked){render();}else{$('#app').innerHTML=vLock();}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 </body>

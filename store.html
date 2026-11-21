@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1C7A54">
+<title>المتجر</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+--bg:#F5F1E8;--card:#FFF;--line:#EAE2D3;--ink:#23201A;--muted:#8A8172;
+--green:#1C7A54;--green-soft:#E4F1EA;--amber:#DE9A2B;--amber-soft:#FBF0DC;
+--red:#C24A3E;--red-soft:#F9E7E5;--blue:#2F6296;--blue-soft:#E8EFF7;
+}
+body{font-family:'Cairo','Noto Sans Arabic',system-ui,sans-serif;background:#DDD6C7;color:var(--ink)}
+#app{max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;background:var(--bg);position:relative;padding-bottom:110px;box-shadow:0 0 40px rgba(0,0,0,.08)}
+button{font-family:inherit;border:none;background:none;cursor:pointer;color:inherit}
+input,textarea{font-family:inherit;font-size:15px}
+.i{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.hero{background:var(--green);color:#fff;padding:26px 20px 30px;text-align:center;border-radius:0 0 26px 26px}
+.hero h1{font-size:23px;font-weight:800}
+.hero p{font-size:13px;color:#CDE7DA;margin-top:4px;font-weight:600}
+.content{padding:14px 16px 0}
+.search{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px 14px;display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.search input{border:none;outline:none;flex:1;font-size:13.5px;background:transparent;color:var(--ink)}
+.cat-t{font-size:14px;font-weight:800;margin:14px 2px 8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.prd{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.prd .nm{font-size:13.5px;font-weight:800;line-height:1.5;min-height:40px}
+.prd .pr{font-size:15px;font-weight:800;color:var(--green)}
+.prd .pr small{font-size:10.5px;color:var(--muted);font-weight:600}
+.prd .stk{font-size:10.5px;font-weight:800}
+.prd .stk.ok{color:var(--green)}
+.prd .stk.low{color:#9A6A14}
+.prd button{background:var(--green);color:#fff;border-radius:10px;padding:9px 0;font-size:12.5px;font-weight:800;margin-top:2px}
+.prd button:disabled{background:#EDE7DA;color:var(--muted);cursor:default}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:36px 12px;font-weight:600;line-height:1.9}
+.empty .big{font-size:16px;font-weight:800;color:var(--ink);margin-bottom:4px}
+.cartbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 35%);z-index:15}
+.cartbar button{width:100%;background:var(--green);color:#fff;border-radius:16px;padding:15px 0;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 16px rgba(28,122,84,.3)}
+.overlay{position:fixed;inset:0;background:rgba(35,32,26,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:18px 18px calc(20px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto}
+.sheet .st{font-size:16px;font-weight:800;margin-bottom:14px;text-align:center}
+.sheet .x{position:absolute;left:16px;top:14px;color:var(--muted)}
+.sheet-wrap{position:relative}
+.field{margin-bottom:13px}
+.field .lbl{font-size:12.5px;font-weight:800;margin-bottom:6px}
+.field input,.field textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14px;color:var(--ink);outline:none}
+.field input:focus,.field textarea:focus{border-color:var(--green)}
+.citem{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.citem .mid{flex:1;min-width:0}
+.citem .t{font-size:13px;font-weight:800}
+.citem .s{font-size:11.5px;color:var(--muted);margin-top:2px}
+.citem .qty{display:flex;align-items:center;gap:9px;background:#F1ECE1;border-radius:10px;padding:5px 9px}
+.citem .qty .n{font-size:14px;font-weight:800;min-width:18px;text-align:center}
+.citem .qty button{font-size:16px;color:var(--green);font-weight:800;width:22px;height:22px}
+.trow{display:flex;justify-content:space-between;font-size:14.5px;font-weight:800;padding:10px 2px;border-top:1px dashed var(--line);margin-top:4px}
+.btn{border-radius:16px;padding:14px 0;text-align:center;font-size:14.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
+.btn-p{background:var(--green);color:#fff}
+.btn-wa{background:#25D366;color:#fff}
+.btn-s{background:var(--card);border:1px solid var(--line);margin-top:8px}
+.toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 20px;border-radius:99px;font-size:13px;font-weight:800;z-index:100;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:pop .25s ease;max-width:88vw;text-align:center}
+@keyframes pop{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.done-wrap{text-align:center;padding:30px 18px}
+.done-wrap .ck{width:70px;height:70px;border-radius:26px;background:var(--green-soft);color:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+.done-wrap h2{font-size:19px;font-weight:800}
+.done-wrap p{font-size:13px;color:var(--muted);font-weight:600;margin:8px 0 18px;line-height:1.9}
+.note{font-size:11px;color:var(--muted);text-align:center;font-weight:600;margin-top:16px;line-height:1.8}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="overlay-root"></div>
+<script>
+'use strict';
+/* ============================================================
+   إعدادات المتجر — بتتملى مرة واحدة لما المشروع يتعمل
+   (المفتاح ده عمومي بالتصميم: بيسمح بقراءة الأصناف وإرسال طلب بس،
+    والحماية الحقيقية من صلاحيات قاعدة البيانات RLS)
+   ============================================================ */
+const STORE_CFG={url:'',anon:''};
+/* ============ helpers ============ */
+const $=(s,r=document)=>r.querySelector(s);
+const AR='ar-EG';
+const fmt=n=>(Math.round((+n||0)*100)/100).toLocaleString(AR,{maximumFractionDigits:2});
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2600);}
+const IC={
+search:'<circle cx="11" cy="11" r="6.2"/><path d="m20 20-3.6-3.6"/>',
+cart:'<circle cx="9" cy="20" r="1.6"/><circle cx="17" cy="20" r="1.6"/><path d="M3 4h2.4l2.2 11h10.6l2-8H6.2"/>',
+x:'<path d="M6 6l12 12M18 6 6 18"/>',
+check:'<path d="m4.5 12.5 5 5L19.5 7"/>',
+wa:'<path d="M21 11.8a8.3 8.3 0 0 1-8.4 8.2c-1.4 0-2.8-.3-4-1L3 20.4l1.5-5A8.3 8.3 0 1 1 21 11.8z"/>',
+box:'<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>',
+};
+const ic=(n,s)=>`<svg class="i"${s?` style="width:${s}px;height:${s}px"`:''} viewBox="0 0 24 24">${IC[n]||''}</svg>`;
+/* ============ data ============ */
+const DEMO=new URLSearchParams(location.search).has('demo');
+const DEMO_PRODUCTS=[
+{id:'p1',name:'زيت عباد ١٠ لتر',cat:'زيوت وسمنة',unit:'قطعة',price:520,stock:6},
+{id:'p2',name:'زيت خليط ٤٫٥ لتر',cat:'زيوت وسمنة',unit:'قطعة',price:260,stock:32},
+{id:'p3',name:'زيت ذرة ٨٠٠ مل',cat:'زيوت وسمنة',unit:'زجاجة',price:75,stock:48},
+{id:'p4',name:'سمنة بلدي (علبة ٢ كيلو)',cat:'زيوت وسمنة',unit:'علبة',price:420,stock:12},
+{id:'p5',name:'فول بلدي (شيكارة ٢٥ كيلو)',cat:'فول وبقوليات',unit:'شيكارة',price:1250,stock:18},
+{id:'p6',name:'فول مجروش (كيلو)',cat:'فول وبقوليات',unit:'كيلو',price:55,stock:60},
+{id:'p7',name:'عدس أصفر (كيلو)',cat:'فول وبقوليات',unit:'كيلو',price:50,stock:75},
+{id:'p8',name:'أرز مصري (كيلو)',cat:'أرز ومكرونة',unit:'كيلو',price:33,stock:120},
+{id:'p9',name:'مكرونة (كيس ١ كيلو)',cat:'أرز ومكرونة',unit:'كيس',price:22,stock:80},
+{id:'p10',name:'سكر (كيلو)',cat:'مستلزمات',unit:'كيلو',price:35,stock:90},
+{id:'p11',name:'شاي (علبة ٢٥٠ جم)',cat:'مستلزمات',unit:'علبة',price:48,stock:36},
+{id:'p12',name:'دقيق (شيكارة ١٠ كيلو)',cat:'مستلزمات',unit:'شيكارة',price:350,stock:0},
+];
+const DEMO_INFO={shop_name:'محل البركة',phone:''};
+let shopInfo={shop_name:'المتجر',phone:''};
+let products=null,loadErr=false;
+let cart={};
+try{cart=JSON.parse(localStorage.getItem('mahal_store_cart'))||{};}catch(e){cart={};}
+const saveCart=()=>localStorage.setItem('mahal_store_cart',JSON.stringify(cart));
+const cartCount=()=>Object.values(cart).reduce((s,q)=>s+q,0);
+const cartTotal=()=>Object.entries(cart).reduce((s,[id,q])=>{const p=(products||[]).find(x=>x.id===id);return s+(p?p.price*q:0);},0);
+async function loadStore(){
+if(DEMO){products=DEMO_PRODUCTS;shopInfo=DEMO_INFO;render();return;}
+if(!STORE_CFG.url||!STORE_CFG.anon){products=[];render();return;}
+try{
+ const h={'apikey':STORE_CFG.anon,'Authorization':'Bearer '+STORE_CFG.anon};
+ const base=STORE_CFG.url.replace(/\/$/,'');
+ const [pr,ir]=await Promise.all([
+   fetch(base+'/rest/v1/products?select=id,name,cat,unit,price,stock&order=cat,name',{headers:h}),
+   fetch(base+'/rest/v1/shop_info?select=shop_name,phone&id=eq.1',{headers:h}),
+ ]);
+ if(!pr.ok)throw 0;
+ products=await pr.json();
+ if(ir.ok){const rows=await ir.json();if(rows&&rows[0])shopInfo=Object.assign(shopInfo,rows[0]);}
+}catch(e){loadErr=true;products=[];}
+render();}
+/* ============ views ============ */
+function render(){const app=$('#app');
+if(products===null){app.innerHTML=`<div class="hero"><h1>…</h1></div><div class="empty">بنحمّل المتجر…</div>`;return;}
+if(!DEMO&&(!STORE_CFG.url||!STORE_CFG.anon)){app.innerHTML=`<div class="hero"><h1>المتجر</h1></div><div class="empty"><div class="big">المتجر تحت التجهيز</div>ارجع لينا قريب إن شاء الله</div>`;return;}
+if(loadErr){app.innerHTML=`<div class="hero"><h1>${esc(shopInfo.shop_name)}</h1></div><div class="empty"><div class="big">في مشكلة في التحميل</div>اتأكد من النت وجرب تاني</div><div style="padding:0 24px"><button class="btn btn-p" onclick="loadErr=false;products=null;loadStore()">حاول تاني</button></div>`;return;}
+document.title=shopInfo.shop_name;
+const q=(window._q||'').trim();
+const list=products.filter(p=>!q||p.name.includes(q));
+const cats=[...new Set(list.map(p=>p.cat||'أصناف'))];
+app.innerHTML=`
+<div class="hero"><h1>${esc(shopInfo.shop_name)}</h1><p>اطلب اللي محتاجه وهنوصلهولك${DEMO?' · نسخة تجريبية':''}</p></div>
+<div class="content">
+<div class="search">${ic('search',18)}<input placeholder="دوّر على صنف…" value="${esc(q)}" oninput="window._q=this.value;render()"></div>
+${list.length?cats.map(c=>`<div class="cat-t">${esc(c)}</div><div class="grid">${list.filter(p=>(p.cat||'أصناف')===c).map(prdHTML).join('')}</div>`).join(''):`<div class="empty"><div class="big">مفيش أصناف مطابقة</div>جرب كلمة تانية</div>`}
+<div class="note">الأسعار بالجنيه · الأسعار بتتحدث من المحل أول بأول</div>
+</div>
+${cartCount()?`<div class="cartbar"><button onclick="openCart()">${ic('cart',20)} السلة · ${cartCount().toLocaleString(AR)} صنف · ${fmt(cartTotal())} جنيه</button></div>`:''}`;}
+function prdHTML(p){const out=!p.stock||p.stock<=0;const inCart=cart[p.id]||0;
+return `<div class="prd"><div class="nm">${esc(p.name)}</div><div class="pr">${fmt(p.price)} <small>جنيه / ${esc(p.unit||'قطعة')}</small></div><div class="stk ${out?'':'ok'}">${out?'<span style="color:var(--red)">خلصت مؤقتاً</span>':inCart?('في السلة: '+inCart.toLocaleString(AR)):'متاح'}</div><button ${out?'disabled':''} onclick="addToCart('${p.id}')">${out?'مش متاح':'ضيف للسلة ＋'}</button></div>`;}
+function addToCart(id){const p=products.find(x=>x.id===id);if(!p)return;
+const cur=cart[id]||0;
+if(p.stock&&cur>=p.stock){toast('دي أقصى كمية متاحة دلوقتي');return;}
+cart[id]=cur+1;saveCart();render();}
+function chQty(id,d){const p=products.find(x=>x.id===id);let q=(cart[id]||0)+d;
+if(q<=0){delete cart[id];}else{if(p&&p.stock&&q>p.stock){toast('دي أقصى كمية متاحة');return;}cart[id]=q;}
+saveCart();render();if($('.overlay'))openCart();}
+function openCart(){const items=Object.entries(cart).map(([id,q])=>({p:products.find(x=>x.id===id),q})).filter(x=>x.p);
+const o=document.createElement('div');o.className='overlay';o.onclick=e=>{if(e.target===o)o.remove();};
+o.innerHTML=`<div class="sheet"><div class="sheet-wrap"><button class="x" onclick="this.closest('.overlay').remove()">${ic('x')}</button><div class="st">سلتك</div>
+${items.map(({p,q})=>`<div class="citem"><div class="mid"><div class="t">${esc(p.name)}</div><div class="s">${fmt(p.price)} ج / ${esc(p.unit||'قطعة')}</div></div><div class="qty"><button onclick="chQty('${p.id}',1)">＋</button><div class="n">${q.toLocaleString(AR)}</div><button onclick="chQty('${p.id}',-1)">−</button></div></div>`).join('')}
+<div class="trow"><span>الإجمالي</span><span>${fmt(cartTotal())} جنيه</span></div>
+<div class="field" style="margin-top:14px"><div class="lbl">اسمك</div><input id="ord-name" placeholder="اسم حضرتك"></div>
+<div class="field"><div class="lbl">موبايلك (عشان نأكد الطلب)</div><input id="ord-phone" inputmode="tel" placeholder="01xxxxxxxxx" style="direction:ltr;text-align:right"></div>
+<div class="field"><div class="lbl">العنوان أو أي ملاحظات</div><textarea id="ord-note" rows="2" placeholder="مثال: شارع كذا، الدور التالت…"></textarea></div>
+<button class="btn btn-p" onclick="submitOrder(false)">ابعت الطلب ✓</button>
+${shopInfo.phone?`<button class="btn btn-wa" style="margin-top:8px" onclick="submitOrder(true)">${ic('wa',18)} ابعت الطلب واتساب</button>`:''}
+</div></div>`;
+$('#overlay-root').innerHTML='';$('#overlay-root').appendChild(o);}
+async function submitOrder(viaWa){const name=($('#ord-name')||{}).value.trim();
+const phone=($('#ord-phone')||{}).value.trim();
+const note=($('#ord-note')||{}).value.trim();
+if(!name){toast('اكتب اسمك الأول');return;}
+if(!viaWa&&!phone){toast('اكتب رقم موبايلك عشان نأكد الطلب');return;}
+const items=Object.entries(cart).map(([id,q])=>{const p=products.find(x=>x.id===id);return p?{id,name:p.name,qty:q,price:p.price,unit:p.unit}:null;}).filter(Boolean);
+if(!items.length){toast('السلة فاضية');return;}
+const total=cartTotal();
+const waText='طلب جديد من '+shopInfo.shop_name+':\n'+items.map(it=>'• '+it.name+' × '+it.qty).join('\n')+'\nالإجمالي: '+fmt(total)+' جنيه'+(note?'\nملاحظات: '+note:'')+'\n— '+name+(phone?' ('+phone+')':'');
+if(viaWa||DEMO){if(shopInfo.phone){let ph=String(shopInfo.phone).replace(/\D/g,'');if(ph.startsWith('0'))ph='2'+ph;
+ window.open('https://wa.me/'+ph+'?text='+encodeURIComponent(waText),'_blank');
+ showDone(true);return;}
+ if(DEMO){toast('دي نسخة تجريبية — الطلب الحقيقي هيشتغل لما المتجر يتفعّل');return;}}
+try{
+ const r=await fetch(STORE_CFG.url.replace(/\/$/,'')+'/rest/v1/orders',{method:'POST',headers:{'apikey':STORE_CFG.anon,'Authorization':'Bearer '+STORE_CFG.anon,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({customer_name:name,phone,note,items,total})});
+ if(!r.ok)throw 0;
+ showDone(false);
+}catch(e){toast('في مشكلة في الإرسال — جرب واتساب أو تاني');}}
+function showDone(viaWa){$('#overlay-root').innerHTML='';cart={};saveCart();
+$('#app').innerHTML=`<div class="hero"><h1>${esc(shopInfo.shop_name)}</h1></div>
+<div class="done-wrap"><div class="ck">${ic('check',34)}</div><h2>طلبك وصل ✓</h2><p>${viaWa?'كمّل الإرسال في واتساب والمحل هيرد عليك يأكد':'المحل هيراجع الطلب ويتصل بيك يأكد'}<br>شكراً ليك ❤</p><button class="btn btn-p" onclick="render()">ارجع للمتجر</button></div>`;}
+loadStore();
+</script>
+</body>
+</html>
