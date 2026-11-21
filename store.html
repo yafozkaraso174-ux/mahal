@@ -83,7 +83,7 @@ input,textarea{font-family:inherit;font-size:15px}
    (المفتاح ده عمومي بالتصميم: بيسمح بقراءة الأصناف وإرسال طلب بس،
     والحماية الحقيقية من صلاحيات قاعدة البيانات RLS)
    ============================================================ */
-const STORE_CFG={url:'',anon:''};
+const STORE_CFG={url:'https://ofqhrpkgxxbdrhuujgxt.supabase.co',anon:'sb_publishable_CH8nhDJQlV-5xsKYoCZRVg_mUoLsTQw'};
 /* ============ helpers ============ */
 const $=(s,r=document)=>r.querySelector(s);
 const AR='ar-EG';
@@ -117,7 +117,7 @@ const DEMO_PRODUCTS=[
 ];
 const DEMO_INFO={shop_name:'محل البركة',phone:''};
 let shopInfo={shop_name:'المتجر',phone:''};
-let products=null,loadErr=false;
+let products=null,loadErr=false,notReady=false;
 let cart={};
 try{cart=JSON.parse(localStorage.getItem('mahal_store_cart'))||{};}catch(e){cart={};}
 const saveCart=()=>localStorage.setItem('mahal_store_cart',JSON.stringify(cart));
@@ -133,6 +133,7 @@ try{
    fetch(base+'/rest/v1/products?select=id,name,cat,unit,price,stock,photo_url&order=cat,name',{headers:h}),
    fetch(base+'/rest/v1/shop_info?select=shop_name,phone&id=eq.1',{headers:h}),
  ]);
+ if(pr.status===404){notReady=true;products=[];render();return;}
  if(!pr.ok)throw 0;
  products=await pr.json();
  if(ir.ok){const rows=await ir.json();if(rows&&rows[0])shopInfo=Object.assign(shopInfo,rows[0]);}
@@ -141,6 +142,7 @@ render();}
 /* ============ views ============ */
 function render(){const app=$('#app');
 if(products===null){app.innerHTML=`<div class="hero"><h1>…</h1></div><div class="empty">بنحمّل المتجر…</div>`;return;}
+if(notReady){app.innerHTML=`<div class="hero"><h1>المتجر</h1></div><div class="empty"><div class="big">المتجر تحت التجهيز</div>ارجع لينا قريب إن شاء الله</div>`;return;}
 if(!DEMO&&(!STORE_CFG.url||!STORE_CFG.anon)){app.innerHTML=`<div class="hero"><h1>المتجر</h1></div><div class="empty"><div class="big">المتجر تحت التجهيز</div>ارجع لينا قريب إن شاء الله</div>`;return;}
 if(loadErr){app.innerHTML=`<div class="hero"><h1>${esc(shopInfo.shop_name)}</h1></div><div class="empty"><div class="big">في مشكلة في التحميل</div>اتأكد من النت وجرب تاني</div><div style="padding:0 24px"><button class="btn btn-p" onclick="loadErr=false;products=null;loadStore()">حاول تاني</button></div>`;return;}
 document.title=shopInfo.shop_name;
@@ -151,7 +153,7 @@ app.innerHTML=`
 <div class="hero"><h1>${esc(shopInfo.shop_name)}</h1><p>اطلب اللي محتاجه وهنوصلهولك${DEMO?' · نسخة تجريبية':''}</p></div>
 <div class="content">
 <div class="search">${ic('search',18)}<input placeholder="دوّر على صنف…" value="${esc(q)}" oninput="window._q=this.value;render()"></div>
-${list.length?cats.map(c=>`<div class="cat-t">${esc(c)}</div><div class="grid">${list.filter(p=>(p.cat||'أصناف')===c).map(prdHTML).join('')}</div>`).join(''):`<div class="empty"><div class="big">مفيش أصناف مطابقة</div>جرب كلمة تانية</div>`}
+${list.length?cats.map(c=>`<div class="cat-t">${esc(c)}</div><div class="grid">${list.filter(p=>(p.cat||'أصناف')===c).map(prdHTML).join('')}</div>`).join(''):(q?`<div class="empty"><div class="big">مفيش أصناف مطابقة</div>جرب كلمة تانية</div>`:`<div class="empty"><div class="big">المتجر لسه فاضي</div>الأصناف هتظهر هنا أول ما المحل ينزّلها</div>`)}
 <div class="note">الأسعار بالجنيه · الأسعار بتتحدث من المحل أول بأول</div>
 </div>
 ${cartCount()?`<div class="cartbar"><button onclick="openCart()">${ic('cart',20)} السلة · ${cartCount().toLocaleString(AR)} صنف · ${fmt(cartTotal())} جنيه</button></div>`:''}`;}
