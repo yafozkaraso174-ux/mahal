@@ -306,7 +306,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r10';
+const APP_VER='2026-11-21r11';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -509,14 +509,34 @@ function scheduleCloudBackup(){clearTimeout(backupTimer);backupTimer=setTimeout(
 async function pushCloudBackup(keepalive){if(!SB.ready())return;const a=authGet();if(!a||!curUser||!curUser.owner)return;
  try{await SB.ensureSession();const changedAt=localStorage.getItem(DIRTY_KEY);const now=new Date().toISOString();
  await SB.req('backups',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify([{id:1,data:DB,updated_at:now}]),keepalive:!!keepalive});
- const s=syncGet();s.lastPush=now;if(!s.decided)s.decided=true;syncSet(s);
+ const s=syncGet();s.lastPush=now;if(!s.decided)s.decided=true;delete s.lastErr;syncSet(s);
  if(changedAt&&localStorage.getItem(DIRTY_KEY)===changedAt)localStorage.removeItem(DIRTY_KEY);
  localStorage.setItem('mahal_last_backup',now);
  const el=document.getElementById('bk-status');if(el)el.textContent=backupStatusText();
- }catch(e){}}
+ }catch(e){try{const s=syncGet();s.lastErr='رفع فشل: '+((e&&e.message)||e);syncSet(s);}catch(_){}}}
 function backupStatusText(){SB.load();if(!(SB.cfg.url&&SB.cfg.anon))return 'حط بيانات الاتصال من قسم المتجر تحت الأول';
  if(!authGet()||!curUser||!curUser.owner)return 'النسخ التلقائي والمزامنة بيشتغلوا لما صاحب المحل يسجل دخوله';
  const t=localStorage.getItem('mahal_last_backup');return t?('آخر نسخة: '+relDate(t)):'المزامنة شغالة — أول نسخة هتترفع بعد أول تعديل';}
+function syncDiagHTML(){const s=syncGet();const a=authGet();const dirty=!!localStorage.getItem(DIRTY_KEY);
+ const row=(k,v)=>`<div class="trow" style="padding:6px 2px"><span class="k">${k}</span><span style="font-weight:700;font-size:12.5px;text-align:left">${v}</span></div>`;
+ return `<div class="total-card" style="margin-top:6px">
+ ${row('الحساب',a&&a.email?esc(a.email):'مفيش — سجّل دخولك')}
+ ${row('الصلاحية',curUser?(curUser.owner?'صاحب المحل 👑':'موظف — المزامنة للمالك بس'):'—')}
+ ${row('آخر رفع ناجح',s.lastPush?relDate(s.lastPush):(localStorage.getItem('mahal_last_backup')?relDate(localStorage.getItem('mahal_last_backup')):'لسه'))}
+ ${row('آخر سحب',s.lastPull?relDate(s.lastPull):'لسه')}
+ ${row('تغييرات مستنية تترفع',dirty?'آه — هتترفع خلال ثوانٍ':'لأ ✓')}
+ ${s.lastErr?row('آخر خطأ','<span style="color:var(--red)">'+esc(s.lastErr)+'</span>'):''}
+ <button class="cbtn" style="width:100%;margin-top:6px;background:var(--green);color:#fff" onclick="doSyncNow()">زامن دلوقتي 🔄</button>
+ </div>`;}
+async function doSyncNow(){if(!SB.ready()||!authGet()){toast('سجّل دخولك الأول');return;}
+ if(!curUser||!curUser.owner){toast('المزامنة شغالة على حساب صاحب المحل بس');return;}
+ toast('بزامن…');
+ try{if(localStorage.getItem(DIRTY_KEY))await pushCloudBackup();
+  await syncTick();
+  const s=syncGet();
+  toast(s.lastErr?('في مشكلة: '+s.lastErr):'تمت المزامنة ✓');
+ }catch(e){toast('في مشكلة في الاتصال — جرب تاني');}
+ render();}
 function applyRemoteDB(d){if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;if(!Array.isArray(d.users))d.users=[];if(!Array.isArray(d.movements))d.movements=[];
  applyingRemote=true;DB=d;localStorage.setItem(KEY,JSON.stringify(DB));applyingRemote=false;}
 async function syncTick(){lastSyncTick=Date.now();
@@ -539,7 +559,7 @@ async function syncTick(){lastSyncTick=Date.now();
    if(b&&b.data&&b.data.products){applyRemoteDB(b.data);
     const s2=syncGet();s2.lastPull=b.updated_at;syncSet(s2);
     render();toast('البيانات اتحدّثت من جهازك التاني ✓');}}
- }catch(e){}
+ }catch(e){try{const s3=syncGet();s3.lastErr='سحب فشل: '+((e&&e.message)||e);syncSet(s3);}catch(_){}}
  syncBusy=false;}
 function showSyncChoice(remDate){sheet('مزامنة الأجهزة',`
 <p style="font-size:13.5px;font-weight:700;line-height:1.9;text-align:center">في نسخة من بيانات المحل على السحابة (آخر تحديث ${relDate(remDate)}).<br>الجهاز ده ياخد بياناته منين؟</p>
@@ -1032,6 +1052,7 @@ ${zonesHTML()}
 ${paySettingsHTML()}
 <div class="sec-title">النسخ الاحتياطي</div>
 <div class="set-row" style="cursor:default">${ic('lock')}<span>نسخ تلقائي على السحابة<span class="s" style="display:block" id="bk-status">${backupStatusText()}</span></span></div>
+${syncDiagHTML()}
 <button class="set-row" onclick="pushCloudBackup().then(()=>{toast(localStorage.getItem('mahal_last_backup')?'النسخة اترفعت ✓':'مفيش اتصال — هتترفع لوحدها أول ما النت يشتغل');})">${ic('upload')}<span>ارفع نسخة دلوقتي<span class="s" style="display:block">بتتخزن في مشروع Supabase بتاعك (جدول backups) — فين؟ افتح supabase.com ← مشروعك ← Table Editor ← backups</span></span></button>
 <button class="set-row" onclick="restoreCloudBackup()">${ic('down')}<span>رجّع آخر نسخة من السحابة<span class="s" style="display:block">لو الجهاز اتضاع أو البيانات اتمسحت</span></span></button>
 <button class="set-row" onclick="exportData()">${ic('download')}<span>نزّل نسخة ملف على جهازك<span class="s" style="display:block">الملف بينزل في فولدر التنزيلات Downloads — ابعته لنفسك واتساب</span></span></button>
