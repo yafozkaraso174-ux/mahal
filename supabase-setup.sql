@@ -49,14 +49,14 @@ alter table orders enable row level security;
 
 -- الزوار (من غير تسجيل دخول): يشوفوا الأصناف وبيانات المحل بس
 drop policy if exists "public read products" on products;
-create policy "public read products" on products for select to anon using (true);
+create policy "public read products" on products for select to public using (true);
 
 drop policy if exists "public read shop_info" on shop_info;
-create policy "public read shop_info" on shop_info for select to anon using (true);
+create policy "public read shop_info" on shop_info for select to public using (true);
 
 -- الزوار: يقدروا يبعتوا طلب جديد، من غير ما يشوفوا طلبات حد تاني ولا يغيّروا حاجة
 drop policy if exists "public insert orders" on orders;
-create policy "public insert orders" on orders for insert to anon with check (true);
+create policy "public insert orders" on orders for insert to public with check (true);
 
 -- صاحب المحل (الحساب المسجل في Authentication): صلاحية كاملة
 drop policy if exists "owner all products" on products;
@@ -78,7 +78,7 @@ values ('product-photos', 'product-photos', true)
 on conflict (id) do nothing;
 
 drop policy if exists "public read product photos" on storage.objects;
-create policy "public read product photos" on storage.objects for select to anon
+create policy "public read product photos" on storage.objects for select to public
 using (bucket_id = 'product-photos');
 
 drop policy if exists "owner write product photos" on storage.objects;
