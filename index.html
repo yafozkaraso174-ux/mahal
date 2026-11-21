@@ -292,88 +292,125 @@ if(DB.settings.deliveryOn==null)DB.settings.deliveryOn=true;
 if(!DB.drafts)DB.drafts=[];
 if(!DB.movements)DB.movements=[];
 if(!Array.isArray(DB.users))DB.users=[];
-if(!DB.users.length&&localStorage.getItem('mahal_pin')){DB.users.push({id:uid(),name:'صاحب المحل',pinH:localStorage.getItem('mahal_pin'),owner:true,active:true,perms:{invoice:1,products:1,customers:1,suppliers:1,orders:1,settings:1,del:1},upd:new Date().toISOString()});localStorage.removeItem('mahal_pin');sessionStorage.removeItem('mahal_pin_ok');}
 DB.users.forEach(u=>{if(!u.owner&&u.perms&&u.perms.stats==null)u.perms.stats=1;});
-function save(){localStorage.setItem(KEY,JSON.stringify(DB));try{scheduleCloudBackup();}catch(e){}}
+const SYNC_KEY='mahal_sync_v1',DIRTY_KEY='mahal_db_changed_at';
+let backupTimer=null,applyingRemote=false,syncBusy=false,lastSyncTick=0;
+function markDirty(){if(applyingRemote)return;localStorage.setItem(DIRTY_KEY,new Date().toISOString());}
+function save(){localStorage.setItem(KEY,JSON.stringify(DB));markDirty();try{scheduleCloudBackup();}catch(e){}}
 function logMove(pid,kind,qty,before,after,ref){DB.movements.push({id:uid(),pid,kind,qty,before,after,ref:ref||'',date:new Date().toISOString()});}
 save();
 /* ============ المستخدمين والقفل (حسابات) ============ */
-const PIN_KEY='mahal_pin',PIN_OK='mahal_pin_ok';
+const AUTH_KEY='mahal_auth';
+function authGet(){try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null');}catch(e){return null;}}
+function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else localStorage.removeItem(AUTH_KEY);SB.token=a?a.access_token:null;SB.tokenExp=a?(a.expires_at*1000-120000):0;}
 let curUser=null;
-try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');if(cu){const u=DB.users.find(x=>x.id===cu.id&&x.active);if(u)curUser=u;}}catch(e){}
-async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
-const pinHash=pin=>sha256hex('mahal-pin-v1:'+pin);
+try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r5';
+const APP_VER='2026-11-21r6';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
-function vSetup(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('users',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>أول مرة تشغّل البرنامج — اعمل حساب المالك عشان البرنامج يتقفل على اللي انت تختارهم بس</p>
-<div class="field" style="text-align:right"><div class="lbl">اسمك</div><input id="su-name" style="letter-spacing:0;font-size:16px" placeholder="مثال: اسماعيل"></div>
-<div class="field" style="text-align:right"><div class="lbl">رقم سري (٤ أرقام أو أكتر)</div><input id="su-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
-<div class="field" style="text-align:right"><div class="lbl">تأكيد الرقم السري</div><input id="su-pin2" type="password" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
-<button class="btn btn-p" style="width:100%;margin-top:6px" onclick="doSetup()">اعمل الحساب وادخل ✓</button></div></div>`;}
-async function doSetup(){const name=($('#su-name')?.value||'').trim();const p1=$('#su-pin')?.value||'';const p2=$('#su-pin2')?.value||'';
-if(!name){toast('اكتب اسمك');return;}
-if(p1.trim().length<4){toast('الرقم السري لازم يكون ٤ حروف أو أرقام على الأقل');return;}
-if(p1!==p2){toast('التأكيد مش مطابق للرقم السري');return;}
-const u={id:uid(),name,pinH:await pinHash(p1.trim()),owner:true,active:true,perms:{invoice:1,products:1,customers:1,suppliers:1,orders:1,settings:1,del:1},upd:new Date().toISOString()};
-DB.users.push(u);save();pushUsers(true);curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify({id:u.id}));render();toast('أهلاً بيك يا '+esc(name)+' ✓');}
-function vLogin(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>اختار حسابك واكتب الرقم السري</p>
-${DB.users.filter(u=>u.active).map(u=>`<button class="user-pick" id="up-${u.id}" onclick="pickLoginUser('${u.id}')">${ic('users',18)} ${esc(u.name)}${u.owner?' 👑':''}</button>`).join('')}
-<div id="login-pin"></div></div></div>`;}
-function pickLoginUser(id){const u=DB.users.find(x=>x.id===id);if(!u)return;
-document.querySelectorAll('.user-pick').forEach(b=>b.classList.remove('on'));
-const b=document.getElementById('up-'+id);if(b)b.classList.add('on');
-$('#login-pin').innerHTML=`<input id="pin-in" type="password" inputmode="numeric" autocomplete="off" placeholder="الرقم السري" onkeydown="if(event.key==='Enter')tryLogin('${id}')"><button class="btn btn-p" style="width:100%;margin-top:12px" onclick="tryLogin('${id}')">دخول</button>`;
-setTimeout(()=>$('#pin-in')?.focus(),50);}
-function loginOk(u){curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify({id:u.id}));render();}
-function loginBad(inp){toast('الرقم السري غلط، حاول تاني');inp.value='';inp.focus();}
-async function tryLogin(id){const u=DB.users.find(x=>x.id===id&&x.active);const inp=$('#pin-in');const v=(inp?.value||'').trim();if(!u||!v)return;
-if(u.pinH){if(await pinHash(v)===u.pinH)loginOk(u);else loginBad(inp);return;}
-try{const ok=await SB.req('rpc/verify_pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_id:u.id,p_pin:v})});
- if(ok===true){u.pinH=await pinHash(v);save();loginOk(u);}else loginBad(inp);
-}catch(e){toast('الحساب ده محتاج نت أول مرة يسجل دخول على الجهاز ده');}}
-function logout(){curUser=null;sessionStorage.removeItem('mahal_cur');closeSheet();go('#/');render();}
+function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
+return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>سجّل دخولك بالإيميل والباسورد — من أي جهاز</p>
+<div class="field" style="text-align:right"><div class="lbl">الإيميل</div><input id="li-email" type="email" value="${esc(em)}" autocomplete="username" style="direction:ltr;text-align:left" placeholder="name@email.com"></div>
+<div class="field" style="text-align:right"><div class="lbl">الباسورد</div><input id="li-pass" type="password" autocomplete="current-password" style="direction:ltr;text-align:left" placeholder="••••••" onkeydown="if(event.key==='Enter')doEmailLogin()"></div>
+<button class="btn btn-p" style="width:100%;margin-top:6px" onclick="doEmailLogin()">دخول</button></div></div>`;}
+async function doEmailLogin(){const em=($('#li-email')?.value||'').trim();const pw=$('#li-pass')?.value||'';
+if(!em||!pw){toast('اكتب الإيميل والباسورد');return;}
+SB.load();const base=(SB.cfg.url||SB_DEF.url).replace(/\/$/,''),anon=SB.cfg.anon||SB_DEF.anon;
+let j,st;try{const r=await fetch(base+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':anon,'Content-Type':'application/json'},body:JSON.stringify({email:em,password:pw})});
+ st=r.status;j=await r.json().catch(()=>({}));}catch(e){toast('في مشكلة في الاتصال — جرب تاني');return;}
+if(st!==200){toast(j.error_description==='Email not confirmed'?'الإيميل ده محتاج تأكيد — شوف إيميلك أو كلّم الدعم':(st===400?'الإيميل أو الباسورد غلط':'في مشكلة في الاتصال — جرب تاني'));return;}
+authSet({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600),uid:j.user&&j.user.id,email:em});
+const u=await fetchMyRole();
+if(!u)return;
+loginOk(u);toast('أهلاً بيك يا '+esc(u.name)+' ✓');}
+async function fetchMyRole(){const a=authGet();if(!a||!a.uid){authSet(null);return null;}
+let rows;try{await SB.ensureSession();rows=await SB.req('shop_users?auth_id=eq.'+a.uid+'&select=*');}
+catch(e){if((e&&e.message||'').includes('400')){authSet(null);toast('في تحديث ناقص في قاعدة البيانات — شغّل ملف SQL الأخير في Supabase الأول');return null;}
+ // أوفلاين: ادخل بالسيشن المحفوظ لو موجود
+ try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');if(cu&&cu.authId===a.uid)return cu;}catch(e2){}
+ authSet(null);toast('في مشكلة في الاتصال — جرب تاني');return null;}
+const r=rows&&rows[0];
+if(!r){authSet(null);toast('الحساب ده مش مربوط بمستخدم في المحل — كلم صاحب المحل يضيفك من إدارة المستخدمين');return null;}
+if(r.active===false){authSet(null);toast('الحساب ده متوقف — كلم صاحب المحل');return null;}
+return {id:r.id,name:r.name,owner:!!r.owner,active:!!r.active,perms:r.perms||{},authId:r.auth_id,upd:r.updated_at||''};}
+function loginBad(inp){toast('الإيميل أو الباسورد غلط');inp.value='';inp.focus();}
+function loginOk(u){curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify(u));render();}
+function logout(){curUser=null;authSet(null);sessionStorage.removeItem('mahal_cur');closeSheet();go('#/');render();}
 function vNoPerm(){return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">مش مسموح</div></div></div><div class="content"><div class="empty"><div class="big">الصفحة دي مش متاحة لحسابك</div>كلم صاحب المحل لو محتاج الصلاحية دي</div></div>`+navbar('');}
 /* ---- إدارة المستخدمين (المالك) ---- */
 function vUsers(){if(!curUser||!curUser.owner)return vNoPerm();
+if(!usersCache)loadUsers().then(()=>{if(location.hash==='#/users')render();});
+const rows=usersCache||[];
+const legacy=(DB.users||[]).filter(lu=>!lu.__converted);
 return `<div class="appbar"><div>${backBtn('#/settings')}<div class="shop" style="margin-top:4px">المستخدمين</div></div></div>
 <div class="content">
-${DB.users.map(u=>`<div class="row"><div class="ic" style="background:${u.active?'var(--green-soft);color:var(--green)':'var(--red-soft);color:var(--red)'}">${ic('users')}</div><div class="mid"><div class="t">${esc(u.name)}${u.owner?' 👑':''}</div><div class="s">${u.active?'شغال':'موقوف'} · ${permSummary(u)}</div></div><div class="end">${u.owner?'':`<button class="cbtn" style="margin-inline-end:6px;background:${u.active?'var(--red-soft);color:var(--red)':'var(--green-soft);color:var(--green)'}" onclick="toggleUser('${u.id}')">${u.active?'ايقاف':'تفعيل'}</button>`}<button style="color:var(--muted);padding:6px" onclick="openUserSheet('${u.id}')">${ic('pencil',18)}</button></div></div>`).join('')}
+${!usersCache?'<div class="empty">بيجيلك المستخدمين…</div>':''}
+${rows.map(u=>`<div class="row"><div class="ic" style="background:${u.active?'var(--green-soft);color:var(--green)':'var(--red-soft);color:var(--red)'}">${ic('users')}</div><div class="mid"><div class="t">${esc(u.name)}${u.owner?' 👑':''}</div><div class="s">${u.active?'شغال':'موقوف'} · ${permSummary(u)}</div></div><div class="end">${u.owner?'':`<button class="cbtn" style="margin-inline-end:6px;background:${u.active?'var(--red-soft);color:var(--red)':'var(--green-soft);color:var(--green)'}" onclick="toggleUser('${u.id}')">${u.active?'ايقاف':'تفعيل'}</button>`}<button style="color:var(--muted);padding:6px" onclick="openUserSheet('${u.id}')">${ic('pencil',18)}</button></div></div>`).join('')}
 <button class="add-item" onclick="openUserSheet('')">＋ مستخدم جديد</button>
+${legacy.length?`<div class="sec-title" style="font-size:13px">حسابات قديمة على الجهاز ده (بالرقم السري)</div>
+<div class="set-row" style="cursor:default"><span style="font-weight:600;color:var(--muted);font-size:12px;line-height:1.8">دي حسابات النظام القديم — حوّلها لحسابات بإيميل وباسورد عشان تشتغل من أي جهاز. بعد التحويل ممكن تمسحها من هنا.</span></div>
+${legacy.map(lu=>`<div class="row"><div class="ic" style="background:var(--amber-soft,#fdf3e3);color:var(--amber,#b97c1e)">${ic('users')}</div><div class="mid"><div class="t">${esc(lu.name)}</div><div class="s">حساب قديم · ${permSummary(lu)}</div></div><div class="end">${lu.owner?'':`<button class="cbtn" style="background:var(--green-soft);color:var(--green)" onclick="openUserSheet('','${lu.id}')">حوّله لإيميل</button><button class="cbtn" style="margin-inline-start:6px;background:var(--red-soft);color:var(--red)" onclick="if(confirm('تمسح الحساب القديم ده من الجهاز؟')){DB.users=DB.users.filter(x=>x.id!=='${lu.id}');save();render();}">مسح</button>`}</div></div>`).join('')}`:''}
 </div>`+navbar('');}
-function openUserSheet(id){const u=id?DB.users.find(x=>x.id===id):null;
-sheet(u?'تعديل مستخدم':'مستخدم جديد',`
-<div class="field"><div class="lbl">الاسم</div><input id="uf-name" value="${u?esc(u.name):''}" placeholder="مثال: أحمد"></div>
-<div class="field"><div class="lbl">${u?'رقم سري جديد (سيبه فاضي لو مش عايز تغيّره)':'رقم سري (٤ أرقام أو أكتر)'}</div><input id="uf-pin" type="password" inputmode="numeric" autocomplete="off"></div>
+function openUserSheet(id,legacyId){const u=id?(usersCache||[]).find(x=>String(x.id)===String(id)):null;
+const lu=legacyId?(DB.users||[]).find(x=>x.id===legacyId):null;
+sheet(u?'تعديل مستخدم':(lu?'تحويل حساب قديم':'مستخدم جديد'),`
+<div class="field"><div class="lbl">الاسم</div><input id="uf-name" value="${u?esc(u.name):(lu?esc(lu.name):'')}" placeholder="مثال: أحمد"></div>
+${u?'':`<div class="field"><div class="lbl">الإيميل</div><input id="uf-email" type="email" autocomplete="off" style="direction:ltr;text-align:left" placeholder="name@email.com"></div>
+<div class="field"><div class="lbl">باسورد (٦ حروف أو أرقام على الأقل)</div><input id="uf-pass" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>`}
 <div class="lbl" style="margin:4px 2px 8px">الصلاحيات</div>
-${PERMS.map(([k,l])=>`<label class="set-row" style="cursor:pointer"><input type="checkbox" id="uf-p-${k}" ${u&&u.perms&&u.perms[k]?'checked':''} style="width:18px;height:18px;accent-color:var(--green)"> <span>${l}</span></label>`).join('')}
-<button class="btn btn-p" style="width:100%;margin-top:10px" onclick="saveUser('${id||''}')">${u?'حفظ ✓':'ضيف المستخدم ✓'}</button>
-${u&&!u.owner?`<button class="btn-danger" onclick="closeSheet();if(confirm('هتمسح المستخدم ده نهائي. متأكد؟')){DB.users=DB.users.filter(x=>x.id!=='${id}');save();pushUsers(true);render();toast('اتمسح');}">مسح المستخدم</button>`:''}`);}
-async function saveUser(id){const name=($('#uf-name')?.value||'').trim();const pin=($('#uf-pin')?.value||'').trim();
+${PERMS.map(([k,l])=>{const src=u?u.perms:(lu?lu.perms:null);return `<label class="set-row" style="cursor:pointer"><input type="checkbox" id="uf-p-${k}" ${src&&src[k]?'checked':''} style="width:18px;height:18px;accent-color:var(--green)"> <span>${l}</span></label>`;}).join('')}
+<button class="btn btn-p" style="width:100%;margin-top:10px" onclick="saveUser('${id||''}','${legacyId||''}')">${u?'حفظ ✓':'ضيف المستخدم ✓'}</button>
+${u&&!u.owner?`<button class="btn-danger" onclick="deleteUser('${id}')">مسح المستخدم</button>`:''}`);}
+async function saveUser(id,legacyId){const name=($('#uf-name')?.value||'').trim();
 if(!name){toast('اكتب الاسم');return;}
 const perms={};PERMS.forEach(([k])=>{const el=document.getElementById('uf-p-'+k);perms[k]=el&&el.checked?1:0;});
-if(id){const u=DB.users.find(x=>x.id===id);if(!u)return;u.name=name;u.perms=perms;
- if(pin){if(pin.length<4){toast('الرقم السري لازم ٤ على الأقل');return;}u.pinH=await pinHash(pin);}
- u.upd=new Date().toISOString();
- save();pushUsers(true);closeSheet();render();toast('اتحفظ ✓');return;}
-if(pin.length<4){toast('اكتب رقم سري ٤ أرقام أو أكتر');return;}
-DB.users.push({id:uid(),name,pinH:await pinHash(pin),owner:false,active:true,perms,upd:new Date().toISOString()});
-save();pushUsers(true);closeSheet();render();toast('المستخدم اتضاف ✓');}
-function toggleUser(id){const u=DB.users.find(x=>x.id===id);if(!u||u.owner)return;u.active=!u.active;u.upd=new Date().toISOString();save();pushUsers(true);
-if(!u.active&&curUser&&curUser.id===id){logout();toast('الحساب اتوقف');return;}
-render();toast(u.active?'الحساب اتفعّل ✓':'الحساب اتوقف');}
-function openMyPinSheet(){sheet('تغيير الرقم السري',`
-<div class="field"><div class="lbl">الرقم السري الحالي</div><input id="mp-old" type="password" inputmode="numeric" autocomplete="off"></div>
-<div class="field"><div class="lbl">الرقم السري الجديد</div><input id="mp-new" type="password" inputmode="numeric" autocomplete="off"></div>
-<div class="field"><div class="lbl">تأكيد الجديد</div><input id="mp-new2" type="password" inputmode="numeric" autocomplete="off"></div>
-<button class="btn btn-p" style="width:100%" onclick="doMyPin()">غيّر الرقم ✓</button>`);}
-async function doMyPin(){const o=($('#mp-old')?.value||'').trim();const n1=($('#mp-new')?.value||'').trim();const n2=($('#mp-new2')?.value||'').trim();
-if(await pinHash(o)!==curUser.pinH){toast('الرقم الحالي غلط');return;}
-if(n1.length<4){toast('الرقم الجديد لازم ٤ على الأقل');return;}
+if(id){try{await SB.ensureSession();
+  await SB.req('shop_users?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({name,perms,updated_at:new Date().toISOString()})});
+  usersCache=null;closeSheet();render();toast('اتحفظ ✓');}catch(e){toast(e.message==='no-auth'?'سجّل دخولك تاني':'في مشكلة في الاتصال — جرب تاني');}
+ return;}
+const email=($('#uf-email')?.value||'').trim();const pass=$('#uf-pass')?.value||'';
+if(!email.includes('@')){toast('اكتب إيميل صحيح');return;}
+if(pass.length<6){toast('الباسورد لازم ٦ حروف أو أرقام على الأقل');return;}
+SB.load();const base=(SB.cfg.url||SB_DEF.url).replace(/\/$/,''),anon=SB.cfg.anon||SB_DEF.anon;
+let j,st;try{const r=await fetch(base+'/auth/v1/signup',{method:'POST',headers:{'apikey':anon,'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+ st=r.status;j=await r.json().catch(()=>({}));}catch(e){toast('في مشكلة في الاتصال — جرب تاني');return;}
+if(st!==200){const msg=(j.msg||j.error_description||j.error||'').toLowerCase();
+ toast(msg.includes('already')?'الإيميل ده متسجل قبل كده':'مشكلة في إنشاء الحساب — جرب تاني');return;}
+const newUid=j.id||(j.user&&j.user.id);
+if(!newUid){toast('مشكلة في إنشاء الحساب — جرب تاني');return;}
+try{await SB.ensureSession();
+ await SB.req('shop_users',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify([{id:uid(),name,auth_id:newUid,owner:false,active:true,perms,updated_at:new Date().toISOString()}])});
+}catch(e){toast('الحساب اتسجل بس الربط فشل — جرب تضيفه تاني');return;}
+if(legacyId){const l=DB.users.find(x=>x.id===legacyId);if(l){l.__converted=true;save();}}
+usersCache=null;
+const needsConfirm=!!(j.confirmation_sent_at||(j.user&&j.user.confirmation_sent_at));
+closeSheet();render();
+toast(needsConfirm?'المستخدم اتضاف ✓ — ملحوظة: تأكيد الإيميل شغال في سوبابيز، طفّيه من الإعدادات عشان يقدر يدخل':'المستخدم اتضاف ✓ — يسجل دخوله بالإيميل والباسورد من أي جهاز');}
+async function toggleUser(id){const u=(usersCache||[]).find(x=>String(x.id)===String(id));if(!u||u.owner)return;
+try{await SB.ensureSession();
+ await SB.req('shop_users?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({active:!u.active,updated_at:new Date().toISOString()})});
+ usersCache=null;render();toast(u.active?'الحساب اتوقف':'الحساب اتفعّل ✓');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
+async function deleteUser(id){if(!confirm('هتمسح المستخدم ده نهائي — مش هيقدر يسجل دخول تاني. متأكد؟'))return;
+try{await SB.ensureSession();
+ await SB.req('shop_users?id=eq.'+encodeURIComponent(id),{method:'DELETE',headers:{'Prefer':'return=minimal'}});
+ usersCache=null;closeSheet();render();toast('اتمسح');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
+let usersCache=null,usersCacheAt=0;
+async function loadUsers(force){if(!force&&usersCache&&Date.now()-usersCacheAt<30000)return usersCache;
+try{await SB.ensureSession();const rows=await SB.req('shop_users?select=id,name,owner,active,perms,updated_at&order=owner.desc,name.asc');
+ if(Array.isArray(rows)){usersCache=rows;usersCacheAt=Date.now();}}catch(e){}
+return usersCache;}
+function openMyPassSheet(){sheet('تغيير الباسورد',`
+<div class="field"><div class="lbl">الباسورد الجديد (٦ على الأقل)</div><input id="mp-new" type="password" autocomplete="new-password" style="direction:ltr;text-align:left"></div>
+<div class="field"><div class="lbl">تأكيد الجديد</div><input id="mp-new2" type="password" autocomplete="new-password" style="direction:ltr;text-align:left"></div>
+<button class="btn btn-p" style="width:100%" onclick="doMyPass()">غيّر الباسورد ✓</button>`);}
+async function doMyPass(){const n1=$('#mp-new')?.value||'';const n2=$('#mp-new2')?.value||'';
+if(n1.length<6){toast('الباسورد الجديد لازم ٦ على الأقل');return;}
 if(n1!==n2){toast('التأكيد مش مطابق');return;}
-curUser.pinH=await pinHash(n1);const u=DB.users.find(x=>x.id===curUser.id);if(u){u.pinH=curUser.pinH;u.upd=new Date().toISOString();}
-save();pushUsers(true);closeSheet();toast('الرقم السري اتغيّر ✓');}
+try{await SB.ensureSession();SB.load();const base=(SB.cfg.url||SB_DEF.url).replace(/\/$/,''),anon=SB.cfg.anon||SB_DEF.anon;
+ const r=await fetch(base+'/auth/v1/user',{method:'PUT',headers:{'apikey':anon,'Authorization':'Bearer '+SB.token,'Content-Type':'application/json'},body:JSON.stringify({password:n1})});
+ if(!r.ok)throw 0;
+ closeSheet();toast('الباسورد اتغيّر ✓');}catch(e){toast('في مشكلة — جرب تاني');}}
 /* ============ صور الأصناف (تخزين محلي IndexedDB) ============ */
 const PHOTOS={
  db:null,
@@ -429,10 +466,12 @@ key:'mahal_shop_cfg',cfg:null,token:null,tokenExp:0,
 load(){if(this.cfg)return;try{this.cfg=JSON.parse(localStorage.getItem(this.key))||{};}catch(e){this.cfg={};}},
 save(){localStorage.setItem(this.key,JSON.stringify(this.cfg||{}));},
 ready(){this.load();return !!(this.cfg.url&&this.cfg.anon);},
-async login(){this.load();if(this.token&&Date.now()<this.tokenExp)return;
- if(!this.cfg.email||!this.cfg.pass)throw new Error('no-auth');
- const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':this.cfg.anon,'Content-Type':'application/json'},body:JSON.stringify({email:this.cfg.email,password:this.cfg.pass})});
- if(!r.ok)throw new Error('auth-failed');const j=await r.json();this.token=j.access_token;this.tokenExp=Date.now()+((j.expires_in||3600)-120)*1000;},
+async ensureSession(){this.load();if(this.token&&Date.now()<this.tokenExp)return;
+ const a=authGet();if(!a||!a.refresh_token)throw new Error('no-auth');
+ if(Date.now()<a.expires_at*1000-120000){this.token=a.access_token;this.tokenExp=a.expires_at*1000-120000;return;}
+ const r=await fetch((this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{'apikey':this.cfg.anon||SB_DEF.anon,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:a.refresh_token})});
+ if(!r.ok){authSet(null);throw new Error('no-auth');}
+ const j=await r.json();authSet({access_token:j.access_token,refresh_token:j.refresh_token||a.refresh_token,expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600),uid:(j.user&&j.user.id)||a.uid,email:a.email});},
 async req(path,opt){opt=opt||{};this.load();const anon=this.cfg.anon||SB_DEF.anon,base=(this.cfg.url||SB_DEF.url).replace(/\/$/,'');
  const h=Object.assign({'apikey':anon,'Authorization':'Bearer '+(this.token||anon)},opt.headers||{});
  const r=await fetch(base+'/rest/v1/'+path,Object.assign({},opt,{headers:h}));
@@ -440,7 +479,7 @@ async req(path,opt){opt=opt||{};this.load();const anon=this.cfg.anon||SB_DEF.ano
 photoUrlFor(p){return this.cfg.url.replace(/\/$/,'')+'/storage/v1/object/public/product-photos/'+encodeURIComponent(p.id)+'.jpg?v='+(p.photoVer||1);},
 async uploadPhoto(id,blob){const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/storage/v1/object/product-photos/'+encodeURIComponent(id)+'.jpg',{method:'POST',headers:{'apikey':this.cfg.anon,'Authorization':'Bearer '+this.token,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
  if(!r.ok)throw new Error('photo-upload-failed:'+r.status);},
-async pushProducts(){await this.login();
+async pushProducts(){await this.ensureSession();
  const ups=JSON.parse(localStorage.getItem('mahal_photo_up')||'{}');
  for(const p of DB.products){if(p.photo&&p.photoVer&&ups[p.id]!==p.photoVer){const blob=await PHOTOS.get(p.id);if(blob){await this.uploadPhoto(p.id,blob);ups[p.id]=p.photoVer;}}}
  localStorage.setItem('mahal_photo_up',JSON.stringify(ups));
@@ -452,70 +491,72 @@ async pushProducts(){await this.login();
  const liveIds=DB.products.map(p=>p.id);
  if(liveIds.length){await this.req('products?id=not.in.('+liveIds.map(encodeURIComponent).join(',')+')',{method:'DELETE'});}
  return rows.length;},
-async fetchOrders(){await this.login();return await this.req('orders?order=created_at.desc&limit=100');},
-async setOrderStatus(id,st){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:st})});},
-async deleteOrder(id){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'DELETE'});},
-async updateOrder(id,items,total){await this.login();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({items,total})});}
+async fetchOrders(){await this.ensureSession();return await this.req('orders?order=created_at.desc&limit=100');},
+async setOrderStatus(id,st){await this.ensureSession();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:st})});},
+async deleteOrder(id){await this.ensureSession();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'DELETE'});},
+async updateOrder(id,items,total){await this.ensureSession();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({items,total})});}
 };
 let shopOrders=null,shopOrdersErr=false,shopOrdersAt=0;
-/* ---- مزامنة الحسابات بين الأجهزة (جدول shop_users) ---- */
-let usersPulledAt=0,pushToastShown=false;const USERS_SYNC_KEY='mahal_users_synced';
-async function pushUsers(loud){if(!SB.ready()||!SB.cfg.email||!SB.cfg.pass){if(loud&&!pushToastShown){pushToastShown=true;toast('بيانات المتجر (الإيميل والباسورد) مش محفوظة على الجهاز ده — الحسابات مش هتتزامن منه');}return;}
- try{await SB.login();const now=new Date().toISOString();
- const rows=DB.users.map(u=>{if(!u.upd)u.upd=now;return{id:u.id,name:u.name,pin_h:u.pinH,owner:!!u.owner,active:!!u.active,perms:u.perms||{},updated_at:u.upd};});
- await SB.req('shop_users',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
- const ids=DB.users.map(u=>u.id);
- if(ids.length)await SB.req('shop_users?id=not.in.('+ids.map(encodeURIComponent).join(',')+')',{method:'DELETE'});
- localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(ids.map(String)));pushToastShown=false;}catch(e){if(loud&&!pushToastShown){pushToastShown=true;toast((e&&e.message||'').includes('40')?'السيرفر رفض الكتابة — تأكد إن حساب المتجر هو صاحب المشروع':'مشكلة اتصال — الحسابات هتتحاول تترفع تاني');}}}
-async function pullUsers(){SB.load();if(!(SB.cfg.url||SB_DEF.url))return false;usersPulledAt=Date.now();
- let rows;try{rows=await SB.req('shop_users_public?select=*');}catch(e){try{rows=await SB.req('shop_users?select=*');}catch(e2){return false;}}
- if(!Array.isArray(rows))return false;
- let changed=false,needPush=false;let synced=[];
- try{synced=JSON.parse(localStorage.getItem(USERS_SYNC_KEY)||'[]');}catch(e){}
- const remoteIds=rows.map(r=>String(r.id));
- const remOwner=rows.find(r=>r.owner&&r.active!==false);
- const locOwner=DB.users.find(u=>u.owner);
- if(remOwner&&locOwner&&String(remOwner.id)!==String(locOwner.id)){
-  DB.users=DB.users.filter(u=>u.id!==locOwner.id);
-  if(curUser&&curUser.id===locOwner.id){curUser=null;sessionStorage.removeItem('mahal_cur');}
- }
- const before=DB.users.length;
- DB.users=DB.users.filter(u=>!(synced.includes(String(u.id))&&!remoteIds.includes(String(u.id))));
- if(DB.users.length!==before)changed=true;
- for(const r of rows){const lu=DB.users.find(x=>String(x.id)===String(r.id));
-  const rem={id:r.id,name:r.name,pinH:r.pin_h,owner:!!r.owner,active:!!r.active,perms:r.perms||{},upd:r.updated_at||''};
-  if(!lu){DB.users.push(rem);changed=true;}
-  else if((Date.parse(r.updated_at)||0)>(Date.parse(lu.upd)||0)){Object.assign(lu,rem);changed=true;}
-  else if((Date.parse(lu.upd)||0)>(Date.parse(r.updated_at)||0)){needPush=true;}}
- if(DB.users.some(u=>!remoteIds.includes(String(u.id))))needPush=true;
- if(changed){save();
-  if(curUser){const still=DB.users.find(x=>x.id===curUser.id&&x.active);if(still)curUser=still;else{curUser=null;sessionStorage.removeItem('mahal_cur');}}}
- localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(remoteIds));
- if(needPush)pushUsers(true);
- return changed;}
-/* ---- نسخ احتياطي تلقائي على السحابة (جدول backups) ---- */
-let backupTimer=null;
+/* ---- نسخ احتياطي تلقائي + مزامنة حية بين الأجهزة (جدول backups) ---- */
+function syncGet(){try{return JSON.parse(localStorage.getItem(SYNC_KEY)||'{}');}catch(e){return {};}}
+function syncSet(s){localStorage.setItem(SYNC_KEY,JSON.stringify(s));}
 function scheduleCloudBackup(){clearTimeout(backupTimer);backupTimer=setTimeout(pushCloudBackup,90000);}
-async function pushCloudBackup(){if(!SB.ready()||!SB.cfg.email||!SB.cfg.pass)return;
- try{await SB.login();
- await SB.req('backups',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify([{id:1,data:DB,updated_at:new Date().toISOString()}])});
- localStorage.setItem('mahal_last_backup',new Date().toISOString());
+async function pushCloudBackup(){if(!SB.ready())return;const a=authGet();if(!a||!curUser||!curUser.owner)return;
+ try{await SB.ensureSession();const changedAt=localStorage.getItem(DIRTY_KEY);const now=new Date().toISOString();
+ await SB.req('backups',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify([{id:1,data:DB,updated_at:now}])});
+ const s=syncGet();s.lastPush=now;if(!s.decided)s.decided=true;syncSet(s);
+ if(changedAt&&localStorage.getItem(DIRTY_KEY)===changedAt)localStorage.removeItem(DIRTY_KEY);
+ localStorage.setItem('mahal_last_backup',now);
  const el=document.getElementById('bk-status');if(el)el.textContent=backupStatusText();
  }catch(e){}}
-function backupStatusText(){SB.load();if(!(SB.cfg.url&&SB.cfg.anon&&SB.cfg.email&&SB.cfg.pass))return 'النسخ التلقائي محتاج بيانات المتجر كاملة (مع الإيميل والباسورد) من قسم المتجر تحت';
-const t=localStorage.getItem('mahal_last_backup');return t?('آخر نسخة تلقائية: '+relDate(t)):'النسخ التلقائي شغال — أول نسخة هتترفع بعد أول تعديل';}
+function backupStatusText(){SB.load();if(!(SB.cfg.url&&SB.cfg.anon))return 'حط بيانات الاتصال من قسم المتجر تحت الأول';
+ if(!authGet()||!curUser||!curUser.owner)return 'النسخ التلقائي والمزامنة بيشتغلوا لما صاحب المحل يسجل دخوله';
+ const t=localStorage.getItem('mahal_last_backup');return t?('آخر نسخة: '+relDate(t)):'المزامنة شغالة — أول نسخة هتترفع بعد أول تعديل';}
+function applyRemoteDB(d){if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;if(!Array.isArray(d.users))d.users=[];if(!Array.isArray(d.movements))d.movements=[];
+ applyingRemote=true;DB=d;localStorage.setItem(KEY,JSON.stringify(DB));applyingRemote=false;}
+async function syncTick(){lastSyncTick=Date.now();
+ if(!SB.ready()||!authGet()||!curUser||!curUser.owner||syncBusy)return;
+ if(document.querySelector('#overlay-root .overlay'))return;
+ syncBusy=true;
+ try{await SB.ensureSession();
+  const rows=await SB.req('backups?id=eq.1&select=updated_at');
+  const rem=rows&&rows[0];const s=syncGet();const dirtyAt=localStorage.getItem(DIRTY_KEY);
+  if(!s.decided){
+   if(rem&&rem.updated_at&&Date.parse(rem.updated_at)>0){syncBusy=false;showSyncChoice(rem.updated_at);return;}
+   s.decided=true;syncSet(s);syncBusy=false;return;}
+  if(dirtyAt){await pushCloudBackup();syncBusy=false;return;}
+  const remTs=Date.parse(rem&&rem.updated_at)||0;
+  if(remTs>Math.max(Date.parse(s.lastPull||0)||0,Date.parse(s.lastPush||0)||0)){
+   const full=await SB.req('backups?id=eq.1&select=data,updated_at');const b=full&&full[0];
+   if(b&&b.data&&b.data.products){applyRemoteDB(b.data);
+    const s2=syncGet();s2.lastPull=b.updated_at;syncSet(s2);
+    render();toast('البيانات اتحدّثت من جهازك التاني ✓');}}
+ }catch(e){}
+ syncBusy=false;}
+function showSyncChoice(remDate){sheet('مزامنة الأجهزة',`
+<p style="font-size:13.5px;font-weight:700;line-height:1.9;text-align:center">في نسخة من بيانات المحل على السحابة (آخر تحديث ${relDate(remDate)}).<br>الجهاز ده ياخد بياناته منين؟</p>
+<button class="btn btn-p" style="width:100%;margin-top:8px" onclick="syncTakeCloud()">حمّل النسخة السحابية هنا<span style="display:block;font-size:11px;font-weight:600">بيانات الجهاز ده هتتبدل بالنسخة — اختار ده على اللابتوب</span></button>
+<button class="btn" style="width:100%;margin-top:8px;background:var(--card);border:1px solid var(--line);color:var(--ink)" onclick="syncTakeLocal()">سيب بيانات الجهاز وارفعها<span style="display:block;font-size:11px;font-weight:600;color:var(--muted)">هتاخد مكان النسخة السحابية — اختار ده على الموبايل</span></button>`);}
+async function syncTakeCloud(){try{await SB.ensureSession();
+ const full=await SB.req('backups?id=eq.1&select=data,updated_at');const b=full&&full[0];
+ if(!b||!b.data||!b.data.products){toast('مفيش نسخة سحابية');return;}
+ applyRemoteDB(b.data);localStorage.removeItem(DIRTY_KEY);
+ syncSet({decided:true,lastPull:b.updated_at,lastPush:b.updated_at});
+ closeSheet();render();toast('البيانات اتحمّلت ✓ — الجهاز ده بقى متزامن');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
+function syncTakeLocal(){syncSet({decided:true});markDirty();closeSheet();pushCloudBackup();toast('بيانات الجهاز هترفع على السحابة ✓');}
 async function restoreCloudBackup(){if(!SB.ready()){toast('المتجر مش متوصل — حط بياناته من الإعدادات الأول');return;}
  toast('بندوّر على آخر نسخة…');
- try{await SB.login();const rows=await SB.req('backups?id=eq.1&select=data,updated_at');
+ try{await SB.ensureSession();const rows=await SB.req('backups?id=eq.1&select=data,updated_at');
  const b=rows&&rows[0];if(!b||!b.data||!b.data.products){toast('لسه مفيش نسخة سحابية');return;}
  confirmSheet('هترجع نسخة '+relDate(b.updated_at)+' — بيانات الجهاز ده هتتبدل بيها. متأكد؟','رجّع النسخة',()=>{
-  const d=b.data;if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;if(!Array.isArray(d.users))d.users=[];if(!Array.isArray(d.movements))d.movements=[];
-  DB=d;save();curUser=null;sessionStorage.removeItem('mahal_cur');render();toast('النسخة رجعت ✓ — سجّل دخول من جديد');});
- }catch(e){toast(e.message==='auth-failed'?'الإيميل أو الباسورد غلط':'في مشكلة في الاتصال — جرب تاني');}}
+  applyRemoteDB(b.data);localStorage.removeItem(DIRTY_KEY);
+  const s=syncGet();s.decided=true;s.lastPull=b.updated_at;s.lastPush=b.updated_at;syncSet(s);
+  render();toast('النسخة رجعت ✓');});
+ }catch(e){toast(e.message==='no-auth'?'سجّل دخولك الأول':'في مشكلة في الاتصال — جرب تاني');}}
 window.addEventListener('pagehide',()=>{if(backupTimer){clearTimeout(backupTimer);backupTimer=null;pushCloudBackup();}});
 async function syncShopNow(){if(!SB.ready()){toast('حط بيانات المتجر الأول من الإعدادات');return;}
 toast('بنزّل الأصناف على المتجر…');
-try{const n=await SB.pushProducts();toast('اتنزّل '+n.toLocaleString(AR)+' صنف على المتجر ✓');}catch(e){toast(e.message==='auth-failed'?'الإيميل أو الباسورد غلط':'في مشكلة في الاتصال — جرب تاني');}}
+try{const n=await SB.pushProducts();toast('اتنزّل '+n.toLocaleString(AR)+' صنف على المتجر ✓');}catch(e){toast(e.message==='no-auth'?'سجّل دخولك الأول':'في مشكلة في الاتصال — جرب تاني');}}
 async function refreshOrders(quiet){if(!SB.ready()){shopOrders=null;return;}
 try{shopOrders=await SB.fetchOrders();shopOrdersErr=false;}catch(e){shopOrdersErr=true;}
 shopOrdersAt=Date.now();
@@ -936,8 +977,6 @@ function shopSettingsHTML(){SB.load();const c=SB.cfg||{};const sUrl=storeUrl();
 if(!SB.ready()){return `<div class="set-row" style="cursor:default"><span style="font-weight:600;color:var(--muted);font-size:12px;line-height:1.8">حط بيانات مشروع Supabase هنا مرة واحدة، والمتجر هيشتغل لوحده. البيانات دي بتتخزن على جهازك بس.</span></div>
 <div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||SB_DEF.url)}" placeholder="https://xxxx.supabase.co" style="direction:ltr;text-align:left" autocomplete="off"></div>
 <div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||SB_DEF.anon)}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
-<div class="field"><div class="lbl">إيميل حساب سوبابيز بتاعك</div><input id="sb-email" value="${esc(c.email||'')}" autocomplete="off" style="direction:ltr;text-align:left"></div>
-<div class="field"><div class="lbl">باسورد سوبابيز</div><input id="sb-pass" value="${esc(c.pass||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <button class="btn btn-p" style="width:100%" onclick="saveShopCfg()">حفظ بيانات المتجر ✓</button>`;}
 return `<div class="set-row" style="cursor:default">${ic('store')}<span>المتجر شغال<span class="s" style="display:block;direction:ltr;text-align:right">${esc(sUrl)}</span></span><button class="cbtn" style="flex:0 0 62px" onclick="copyStoreLink()">${ic('copy',14)} نسخ</button><button class="cbtn" style="flex:0 0 62px;background:var(--green-soft);color:var(--green);margin-inline-start:6px" onclick="openStore()">${ic('open',14)} فتح</button></div>
 <button class="set-row" onclick="syncShopNow()">${ic('upload')}<span>نزّل الأصناف على المتجر<span class="s" style="display:block">حدّث الأسعار والكميات واسم المحل عند الزباين</span></span></button>
@@ -946,8 +985,6 @@ return `<div class="set-row" style="cursor:default">${ic('store')}<span>المت
 <template id="sb-cfg-tpl">
 <div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||SB_DEF.url)}" style="direction:ltr;text-align:left" autocomplete="off"></div>
 <div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||SB_DEF.anon)}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
-<div class="field"><div class="lbl">إيميل حساب سوبابيز</div><input id="sb-email" value="${esc(c.email||'')}" autocomplete="off" style="direction:ltr;text-align:left"></div>
-<div class="field"><div class="lbl">باسورد سوبابيز</div><input id="sb-pass" value="${esc(c.pass||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <button class="btn btn-p" style="width:100%" onclick="saveShopCfg()">حفظ ✓</button>
 </template>`;}
 function zonesHTML(){return DB.settings.zones.map((z,i)=>`<div style="display:flex;gap:7px;margin-bottom:7px"><input value="${esc(z.name)}" placeholder="اسم المنطقة (مثال: داخل شربين)" oninput="DB.settings.zones[${i}].name=this.value;save()" style="flex:1.6;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit"><input type="number" min="0" step="any" value="${z.fee}" placeholder="السعر" oninput="DB.settings.zones[${i}].fee=Math.max(0,+this.value||0);save()" style="flex:0.7;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 8px;font-size:13px;font-family:inherit;direction:ltr;text-align:center"><button onclick="DB.settings.zones.splice(${i},1);save();render()" style="color:var(--red);padding:0 8px">${ic('trash',17)}</button></div>`).join('')
@@ -961,7 +998,7 @@ return `<label class="set-row" style="cursor:pointer"><input type="checkbox" ${p
 +numRow('bank','تحويل بنكي','رقم الحساب أو IBAN')
 +`<div style="font-size:11.5px;color:var(--muted);font-weight:600;margin:0 2px 8px">بعد ما تظبط الطرق دوس «نزّل الأصناف على المتجر» عشان تظهر للزباين</div>`;}
 function payToggle(k,on){DB.settings.pay[k].on=on;save();render();}
-function saveShopCfg(){SB.cfg={url:($('#sb-url')||{}).value.trim(),anon:($('#sb-anon')||{}).value.trim(),email:($('#sb-email')||{}).value.trim(),pass:($('#sb-pass')||{}).value};
+function saveShopCfg(){SB.load();SB.cfg=Object.assign({},SB.cfg,{url:($('#sb-url')||{}).value.trim(),anon:($('#sb-anon')||{}).value.trim()});delete SB.cfg.pass;
 SB.save();SB.token=null;shopOrders=null;shopOrdersAt=0;closeSheet();render();toast('بيانات المتجر اتحفظت ✓');}
 function copyStoreLink(){const u=storeUrl();
 const done=()=>toast('اللينك اتنسخ ✓ — ابعته لزباينك');
@@ -998,9 +1035,9 @@ ${paySettingsHTML()}
 <div class="sec-title">المستخدمين والأمان</div>
 <div class="set-row" style="cursor:default">${ic('users')}<span>الحساب الحالي: <b>${esc(curUser.name)}</b>${curUser.owner?' 👑':''}<span class="s" style="display:block">${curUser.owner?'كل الصلاحيات':permSummary(curUser)}</span></span></div>
 ${curUser.owner?`<button class="set-row" onclick="go('#/users')">${ic('users')}<span>إدارة المستخدمين<span class="s" style="display:block">ضيف حسابات للعاملين معاك، فعّل/وقّف، وحدد صلاحيات كل واحد</span></span></button>`:''}
-<button class="set-row" onclick="openMyPinSheet()">${ic('lock')}<span>غيّر الرقم السري بتاعك</span></button>
+<button class="set-row" onclick="openMyPassSheet()">${ic('lock')}<span>غيّر الباسورد بتاعك</span></button>
 <button class="set-row" style="color:var(--red)" onclick="logout()">${ic('x')}<span>تسجيل خروج</span></button>
-<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · إصدار ${APP_VER} · بياناتك الأساسية على جهازك والنسخة الاحتياطية على السحابة</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · إصدار ${APP_VER} · متزامن على كل أجهزتك عن طريق السحابة</div>
 </div>`+navbar('home');}
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
 const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='نسخة-احتياطية-'+todayStr()+'.json';a.click();toast('النسخة نزلت ✓');}
@@ -1040,7 +1077,6 @@ downloadCSV('الأرصدة',rows);}
 /* ============ router ============ */
 function go(h){location.hash=h;}
 function render(){const h=location.hash||'#/';const app=$('#app');
-if(!DB.users.length){app.innerHTML=vSetup();return;}
 if(!curUser){app.innerHTML=vLogin();return;}
 let html;
 if(h==='#/'||h==='#'){closeSheet();html=vDash();}
@@ -1060,8 +1096,10 @@ else{html=vDash();}
 app.innerHTML=html;window.scrollTo(0,0);
 hydratePhotos();
 if((h==='#/'||h==='#')&&SB.ready()&&Date.now()-shopOrdersAt>60000){refreshOrders(true);}
-if(Date.now()-usersPulledAt>60000){pullUsers().then(ch=>{if(ch)render();});}}
+if(Date.now()-lastSyncTick>45000){syncTick();}}
 window.addEventListener('hashchange',()=>{render();});
+setInterval(()=>{if(document.visibilityState==='visible')syncTick();},60000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncTick();});
 render();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
