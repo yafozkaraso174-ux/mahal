@@ -306,7 +306,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r6';
+const APP_VER='2026-11-21r7';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -375,8 +375,13 @@ if(pass.length<6){toast('الباسورد لازم ٦ حروف أو أرقام �
 SB.load();const base=(SB.cfg.url||SB_DEF.url).replace(/\/$/,''),anon=SB.cfg.anon||SB_DEF.anon;
 let j,st;try{const r=await fetch(base+'/auth/v1/signup',{method:'POST',headers:{'apikey':anon,'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
  st=r.status;j=await r.json().catch(()=>({}));}catch(e){toast('في مشكلة في الاتصال — جرب تاني');return;}
-if(st!==200){const msg=(j.msg||j.error_description||j.error||'').toLowerCase();
- toast(msg.includes('already')?'الإيميل ده متسجل قبل كده':'مشكلة في إنشاء الحساب — جرب تاني');return;}
+if(st!==200){const msg=(j.msg||j.error_description||j.error||'').toLowerCase();const code=((j.error_code||j.code)||'')+'';
+ const why=msg.includes('already')||code.includes('already')?'الإيميل ده متسجل قبل كده — اختار إيميل تاني'
+  :(code.includes('signup_disabled')||msg.includes('signups not allowed'))?'إنشاء الحسابات مقفول من سوبابيز — من Supabase افتح Authentication ← Providers ← Email وشغّل "Allow new users to sign up"'
+  :(code.includes('weak_password')||msg.includes('password'))?'الباسورد ضعيف — خليه ٦ حروف أو أرقام على الأقل'
+  :(st===429||code.includes('rate_limit'))?'محاولات كتير — استنى دقيقة وجرب تاني'
+  :'مشكلة في إنشاء الحساب — جرب تاني';
+ toast(why);return;}
 const newUid=j.id||(j.user&&j.user.id);
 if(!newUid){toast('مشكلة في إنشاء الحساب — جرب تاني');return;}
 try{await SB.ensureSession();
