@@ -545,7 +545,7 @@ function vSettings(){return `<div class="appbar"><div>${backBtn('#/')}<div class
 <button class="set-row" onclick="exportPurchases()">${ic('download')}<span>التوريدات<span class="s" style="display:block">كل البضاعة اللي دخلت من الموردين</span></span></button>
 <button class="set-row" onclick="exportParties()">${ic('download')}<span>أرصدة الزباين والموردين<span class="s" style="display:block">مين عليه كام ومين لك عنده</span></span></button>
 <div class="sec-title">منطقة الخطر</div>
-<button class="set-row" style="color:var(--red)" onclick="confirmSheet('هيمسح كل البيانات ويرجع الأصناف الافتراضية من الأول. متأكد؟','امسح كل حاجة',()=>{DB=seed();save();go('#/');render();toast('رجعنا للبيانات الافتراضية');})">${ic('trash')}<span>امسح كل البيانات وابدأ من جديد</span></button>
+<button class="set-row" style="color:var(--red)" onclick="openResetSheet()">${ic('trash')}<span>امسح كل البيانات وابدأ من جديد</span></button>
 <div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · النسخة التانية · بياناتك متخزنة على جهازك بس</div>
 </div>`+navbar('home');}
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
@@ -553,6 +553,18 @@ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=
 function importData(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
 r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.products||!d.settings)throw 0;if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;DB=d;save();render();toast('النسخة رجعت ✓');}catch(e){toast('الملف ده مش نسخة صحيحة');}};
 r.readAsText(f);}
+function openResetSheet(){
+sheet('مسح كل البيانات',`
+<div class="alert" style="margin-top:0;background:var(--red-soft);border-color:#EFC9C5"><span style="color:var(--red)">${ic('alert')}</span><div class="tx" style="color:var(--red)">ده هيمسح كل حاجة: الأصناف والفواتير والزباين والموردين والمسودات، ويرجع البرنامج للبداية من أول وجديد. مفيش رجوع بعدها.</div></div>
+<div class="field" style="margin-top:13px"><div class="lbl">للتأكيد، اكتب الجملة دي: «امسح كل حاجه»</div><input id="reset-confirm" placeholder="امسح كل حاجه" autocomplete="off"></div>
+<button class="btn btn-p" id="reset-go" style="background:var(--red);width:100%;opacity:.45" disabled onclick="doFullReset()">امسح كل حاجة وابدأ من جديد</button>
+<button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="closeSheet()">لأ، ارجع</button>`);
+const inp=$('#reset-confirm'),btn=$('#reset-go');
+if(inp&&btn){inp.oninput=()=>{const okk=inp.value.trim().replace(/ة/g,'ه')==='امسح كل حاجه';btn.disabled=!okk;btn.style.opacity=okk?'1':'.45';};}
+setTimeout(()=>inp&&inp.focus(),60);}
+function doFullReset(){const inp=$('#reset-confirm');const okk=inp&&inp.value.trim().replace(/ة/g,'ه')==='امسح كل حاجه';
+if(!okk){toast('اكتب الجملة صح الأول');return;}
+closeSheet();DB=seed();save();invDraft=null;purDraft=null;go('#/');render();toast('اتمسح كل حاجة ورجعنا للبداية');}
 function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 function downloadCSV(name,rows){const csv='\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
 const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'-'+todayStr()+'.csv';a.click();toast('الملف نزل ✓ — يفتح في Excel');}
