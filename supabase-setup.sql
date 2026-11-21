@@ -400,3 +400,86 @@ $$;
 revoke all on function verify_pin(text, text) from public;
 grant execute on function verify_pin(text, text) to anon;
 grant execute on function verify_pin(text, text) to authenticated;
+
+-- ============================================================
+-- محلّي — جولة ٤ (٢٠٢٦-١١-٢١): دخول بالإيميل والباسورد + مزامنة حية
+-- بيربط مستخدمي المحل بحسابات سوبابيز الحقيقية، وبيشيل نظام الرقم السري القديم
+-- شغّل الملف ده كله مرة واحدة في SQL Editor — آمن يتشغل أكتر من مرة
+-- ============================================================
+
+-- ١) عمود الربط بين مستخدم المحل وحساب سوبابيز
+alter table shop_users add column if not exists auth_id uuid;
+create unique index if not exists shop_users_auth_id_key on shop_users (auth_id);
+
+-- ٢) اربط حساب المالك الموجود بأول حساب سوبابيز اتعمل في المشروع (حسابك إنت)
+update shop_users
+set auth_id = (select id from auth.users order by created_at asc limit 1)
+where owner = true and auth_id is null;
+
+-- ٣) دوال الفحص (security definer — مفيش أي grant جديد على auth.users)
+create or replace function public.is_shop_member()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(exists(select 1 from public.shop_users where auth_id = auth.uid() and active), false);
+$$;
+create or replace function public.is_shop_owner()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(exists(select 1 from public.shop_users where auth_id = auth.uid() and owner and active), false);
+$$;
+create or replace function public.shop_users_count()
+returns bigint language sql stable security definer set search_path = public as $$
+  select count(*) from public.shop_users;
+$$;
+revoke all on function public.is_shop_member() from public;
+grant execute on function public.is_shop_member() to anon, authenticated;
+revoke all on function public.is_shop_owner() from public;
+grant execute on function public.is_shop_owner() to anon, authenticated;
+revoke all on function public.shop_users_count() from public;
+grant execute on function public.shop_users_count() to anon, authenticated;
+
+-- ٤) سياسات shop_users: الأعضاء يقرأوا القايمة، المالك بس يعدّل، وأول مالك لمحل جديد
+drop policy if exists "owner all shop_users" on shop_users;
+drop policy if exists "member read shop_users" on shop_users;
+drop policy if exists "owner write shop_users" on shop_users;
+drop policy if exists "bootstrap first owner" on shop_users;
+create policy "member read shop_users" on shop_users for select to authenticated
+  using (public.is_shop_member());
+create policy "owner write shop_users" on shop_users for all to authenticated
+  using (public.is_shop_owner()) with check (public.is_shop_owner());
+create policy "bootstrap first owner" on shop_users for insert to authenticated
+  with check (owner and public.shop_users_count() = 0);
+
+-- ٥) باقي الجداول: أي عضو شغال يكتب (المالك والموظفين)
+drop policy if exists "owner all products" on products;
+drop policy if exists "member all products" on products;
+create policy "member all products" on products for all to authenticated
+  using (public.is_shop_member()) with check (public.is_shop_member());
+
+drop policy if exists "owner all orders" on orders;
+drop policy if exists "member all orders" on orders;
+create policy "member all orders" on orders for all to authenticated
+  using (public.is_shop_member()) with check (public.is_shop_member());
+
+drop policy if exists "owner all shop_info" on shop_info;
+drop policy if exists "member all shop_info" on shop_info;
+create policy "member all shop_info" on shop_info for all to authenticated
+  using (public.is_shop_member()) with check (public.is_shop_member());
+
+drop policy if exists "owner write product photos" on storage.objects;
+drop policy if exists "member write product photos" on storage.objects;
+create policy "member write product photos" on storage.objects for all to authenticated
+  using (bucket_id = 'product-photos' and public.is_shop_member())
+  with check (bucket_id = 'product-photos' and public.is_shop_member());
+
+-- النسخ الاحتياطية تفضل للمالك بس (فيها كل بيانات المحل)
+-- سياسة "owner all backups" شغالة زي ما هي مع تعريف is_shop_owner الجديد
+
+-- ٦) تنضيف نظام الرقم السري القديم
+drop function if exists public.verify_pin(text, text);
+drop table if exists pin_attempts;
+drop view if exists shop_users_public;
+alter table shop_users drop column if exists pin_h;
+
+-- قراءة الأصناف وبيانات المحل وإرسال الطلبات للزباين زي ما هي (مش متأثرة)
+-- ملحوظة: سيب "Allow new users to sign up" شغال — المالك بيستخدمه لما يضيف موظف من التطبيق.
+-- أي حساب يتعمل بره التطبيق مش هيشوف حاجة: مفيش صلاحيات غير لأعضاء المحل بس.
+-- ومهم: طفّي "Confirm email" من Authentication ← Providers ← Email عشان حسابات الموظفين تشتغل على طول.
