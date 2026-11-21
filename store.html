@@ -71,6 +71,15 @@ input,textarea{font-family:inherit;font-size:15px}
 .done-wrap h2{font-size:19px;font-weight:800}
 .done-wrap p{font-size:13px;color:var(--muted);font-weight:600;margin:8px 0 18px;line-height:1.9}
 .note{font-size:11px;color:var(--muted);text-align:center;font-weight:600;margin-top:16px;line-height:1.8}
+@media(min-width:768px){
+#app{max-width:1080px}
+.cartbar{max-width:640px}
+.sheet{max-width:620px}
+.grid{grid-template-columns:repeat(3,1fr)}
+}
+@media(min-width:1200px){
+.grid{grid-template-columns:repeat(4,1fr)}
+}
 </style>
 </head>
 <body>
