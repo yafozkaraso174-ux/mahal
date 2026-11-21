@@ -91,7 +91,9 @@ using (bucket_id = 'product-photos') with check (bucket_id = 'product-photos');
 -- ============================================================
 alter table shop_info add column if not exists payment jsonb;
 alter table shop_info add column if not exists delivery_fee numeric not null default 0;
+alter table shop_info add column if not exists zones jsonb;
 alter table orders add column if not exists delivery text;
 alter table orders add column if not exists payment text;
 alter table orders add column if not exists address text;
 alter table orders add column if not exists delivery_fee numeric not null default 0;
+alter table orders add column if not exists zone text;
