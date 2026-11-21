@@ -134,6 +134,8 @@ button.row{cursor:pointer}
 .lockcard p{font-size:12.5px;color:var(--muted);margin:5px 0 16px;font-weight:600}
 .lockcard input{width:100%;background:#F7F3EA;border:1px solid var(--line);border-radius:14px;padding:13px;font-size:20px;font-weight:800;text-align:center;letter-spacing:6px;outline:none;color:var(--ink)}
 .lockcard input:focus{border-color:var(--green)}
+.user-pick{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:#F7F3EA;font-weight:800;font-size:15px;margin-bottom:8px;cursor:pointer;color:var(--ink);font-family:inherit}
+.user-pick.on{border-color:var(--green);background:var(--green-soft);color:var(--green)}
 .ord{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:10px}
 .ord .oh{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .ord .onm{font-size:14px;font-weight:800}
@@ -257,6 +259,7 @@ const catIcon=c=>c==='زيوت وسمنة'?'barrel':(c==='فول وبقوليا�
 const KEY='mahal_v1';
 const CATS=['زيوت وسمنة','فول وبقوليات','أرز ومكرونة','مستلزمات'];
 function seed(){return{
+users:[],movements:[],drafts:[],
 settings:{shopName:'محل البركة',ownerName:'',currency:'جنيه'},
 products:[
  {id:'p1',name:'زيت عباد ١٠ لتر',cat:'زيوت وسمنة',unit:'قطعة',wPrice:470,rPrice:520,cost:430,stock:6,lowAt:10},
@@ -288,35 +291,81 @@ if(!Array.isArray(DB.settings.zones))DB.settings.zones=[];
 if(DB.settings.deliveryOn==null)DB.settings.deliveryOn=true;
 if(!DB.drafts)DB.drafts=[];
 if(!DB.movements)DB.movements=[];
+if(!Array.isArray(DB.users))DB.users=[];
+if(!DB.users.length&&localStorage.getItem('mahal_pin')){DB.users.push({id:uid(),name:'صاحب المحل',pinH:localStorage.getItem('mahal_pin'),owner:true,active:true,perms:{invoice:1,products:1,customers:1,suppliers:1,orders:1,settings:1,del:1}});localStorage.removeItem('mahal_pin');sessionStorage.removeItem('mahal_pin_ok');}
 function save(){localStorage.setItem(KEY,JSON.stringify(DB));}
 function logMove(pid,kind,qty,before,after,ref){DB.movements.push({id:uid(),pid,kind,qty,before,after,ref:ref||'',date:new Date().toISOString()});}
 save();
-/* ============ قفل البرنامج (PIN) ============ */
+/* ============ المستخدمين والقفل (حسابات) ============ */
 const PIN_KEY='mahal_pin',PIN_OK='mahal_pin_ok';
-let unlocked=!localStorage.getItem(PIN_KEY)||sessionStorage.getItem(PIN_OK)==='1';
+let curUser=null;
+try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');if(cu){const u=DB.users.find(x=>x.id===cu.id&&x.active);if(u)curUser=u;}}catch(e){}
 async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 const pinHash=pin=>sha256hex('mahal-pin-v1:'+pin);
-function vLock(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>البرنامج متقفل — اكتب رقم القفل عشان تدخل</p><input id="pin-in" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" onkeydown="if(event.key==='Enter')tryUnlock()"><button class="btn btn-p" style="width:100%;margin-top:12px" onclick="tryUnlock()">دخول</button></div></div>`;}
-async function tryUnlock(){const inp=$('#pin-in');const v=(inp&&inp.value||'').trim();if(!v)return;
-if(await pinHash(v)===localStorage.getItem(PIN_KEY)){unlocked=true;sessionStorage.setItem(PIN_OK,'1');render();}else{toast('القفل غلط، حاول تاني');inp.value='';inp.focus();}}
-function openPinSheet(mode){const has=!!localStorage.getItem(PIN_KEY);
-if(mode==='set'||mode==='change'){sheet(has?'تغيير قفل البرنامج':'قفل البرنامج',`
-<p style="font-size:12.5px;color:var(--muted);font-weight:600;text-align:center;margin-bottom:12px">${has?'اكتب القفل الحالي الأول، وبعدين القفل الجديد':'اختار رقم قفل (٤ أرقام أو أكتر) — هيتطلب كل ما تفتح البرنامج'}</p>
-${has?'<div class="field"><div class="lbl">القفل الحالي</div><input id="pin-old" type="password" inputmode="numeric" autocomplete="off"></div>':''}
-<div class="field"><div class="lbl">القفل الجديد</div><input id="pin-new" type="password" inputmode="numeric" autocomplete="off"></div>
-<div class="field"><div class="lbl">تأكيد القفل الجديد</div><input id="pin-new2" type="password" inputmode="numeric" autocomplete="off"></div>
-<button class="btn btn-p" style="width:100%" onclick="doSetPin(${has?1:0})">${has?'غيّر القفل ✓':'فعّل القفل ✓'}</button>`);}
-else if(mode==='remove'){sheet('شيل قفل البرنامج',`
-<div class="field"><div class="lbl">اكتب القفل الحالي للتأكيد</div><input id="pin-old" type="password" inputmode="numeric" autocomplete="off"></div>
-<button class="btn btn-p" style="background:var(--red);width:100%" onclick="doRemovePin()">شيل القفل</button>`);}}
-async function doSetPin(has){const n1=($('#pin-new')||{}).value||'';const n2=($('#pin-new2')||{}).value||'';
-if(n1.trim().length<4){toast('القفل لازم يكون ٤ حروف أو أرقام على الأقل');return;}
-if(n1!==n2){toast('التأكيد مش مطابق للقفل الجديد');return;}
-if(has){const old=($('#pin-old')||{}).value||'';if(await pinHash(old)!==localStorage.getItem(PIN_KEY)){toast('القفل الحالي غلط');return;}}
-localStorage.setItem(PIN_KEY,await pinHash(n1.trim()));sessionStorage.setItem(PIN_OK,'1');closeSheet();render();toast('القفل اتحفظ ✓');}
-async function doRemovePin(){const old=($('#pin-old')||{}).value||'';
-if(await pinHash(old)!==localStorage.getItem(PIN_KEY)){toast('القفل غلط');return;}
-localStorage.removeItem(PIN_KEY);sessionStorage.removeItem(PIN_OK);closeSheet();render();toast('القفل اتشال ✓');}
+function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
+const PERMS=[['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
+function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
+function vSetup(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('users',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>أول مرة تشغّل البرنامج — اعمل حساب المالك عشان البرنامج يتقفل على اللي انت تختارهم بس</p>
+<div class="field" style="text-align:right"><div class="lbl">اسمك</div><input id="su-name" style="letter-spacing:0;font-size:16px" placeholder="مثال: اسماعيل"></div>
+<div class="field" style="text-align:right"><div class="lbl">رقم سري (٤ أرقام أو أكتر)</div><input id="su-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
+<div class="field" style="text-align:right"><div class="lbl">تأكيد الرقم السري</div><input id="su-pin2" type="password" inputmode="numeric" autocomplete="off" placeholder="••••"></div>
+<button class="btn btn-p" style="width:100%;margin-top:6px" onclick="doSetup()">اعمل الحساب وادخل ✓</button></div></div>`;}
+async function doSetup(){const name=($('#su-name')?.value||'').trim();const p1=$('#su-pin')?.value||'';const p2=$('#su-pin2')?.value||'';
+if(!name){toast('اكتب اسمك');return;}
+if(p1.trim().length<4){toast('الرقم السري لازم يكون ٤ حروف أو أرقام على الأقل');return;}
+if(p1!==p2){toast('التأكيد مش مطابق للرقم السري');return;}
+const u={id:uid(),name,pinH:await pinHash(p1.trim()),owner:true,active:true,perms:{invoice:1,products:1,customers:1,suppliers:1,orders:1,settings:1,del:1}};
+DB.users.push(u);save();curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify({id:u.id}));render();toast('أهلاً بيك يا '+esc(name)+' ✓');}
+function vLogin(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>اختار حسابك واكتب الرقم السري</p>
+${DB.users.filter(u=>u.active).map(u=>`<button class="user-pick" id="up-${u.id}" onclick="pickLoginUser('${u.id}')">${ic('users',18)} ${esc(u.name)}${u.owner?' 👑':''}</button>`).join('')}
+<div id="login-pin"></div></div></div>`;}
+function pickLoginUser(id){const u=DB.users.find(x=>x.id===id);if(!u)return;
+document.querySelectorAll('.user-pick').forEach(b=>b.classList.remove('on'));
+const b=document.getElementById('up-'+id);if(b)b.classList.add('on');
+$('#login-pin').innerHTML=`<input id="pin-in" type="password" inputmode="numeric" autocomplete="off" placeholder="الرقم السري" onkeydown="if(event.key==='Enter')tryLogin('${id}')"><button class="btn btn-p" style="width:100%;margin-top:12px" onclick="tryLogin('${id}')">دخول</button>`;
+setTimeout(()=>$('#pin-in')?.focus(),50);}
+async function tryLogin(id){const u=DB.users.find(x=>x.id===id&&x.active);const inp=$('#pin-in');const v=(inp?.value||'').trim();if(!u||!v)return;
+if(await pinHash(v)===u.pinH){curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify({id:u.id}));render();}else{toast('الرقم السري غلط، حاول تاني');inp.value='';inp.focus();}}
+function logout(){curUser=null;sessionStorage.removeItem('mahal_cur');closeSheet();go('#/');render();}
+function vNoPerm(){return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">مش مسموح</div></div></div><div class="content"><div class="empty"><div class="big">الصفحة دي مش متاحة لحسابك</div>كلم صاحب المحل لو محتاج الصلاحية دي</div></div>`+navbar('');}
+/* ---- إدارة المستخدمين (المالك) ---- */
+function vUsers(){if(!curUser||!curUser.owner)return vNoPerm();
+return `<div class="appbar"><div>${backBtn('#/settings')}<div class="shop" style="margin-top:4px">المستخدمين</div></div></div>
+<div class="content">
+${DB.users.map(u=>`<div class="row"><div class="ic" style="background:${u.active?'var(--green-soft);color:var(--green)':'var(--red-soft);color:var(--red)'}">${ic('users')}</div><div class="mid"><div class="t">${esc(u.name)}${u.owner?' 👑':''}</div><div class="s">${u.active?'شغال':'موقوف'} · ${permSummary(u)}</div></div><div class="end">${u.owner?'':`<button class="cbtn" style="margin-inline-end:6px;background:${u.active?'var(--red-soft);color:var(--red)':'var(--green-soft);color:var(--green)'}" onclick="toggleUser('${u.id}')">${u.active?'ايقاف':'تفعيل'}</button>`}<button style="color:var(--muted);padding:6px" onclick="openUserSheet('${u.id}')">${ic('pencil',18)}</button></div></div>`).join('')}
+<button class="add-item" onclick="openUserSheet('')">＋ مستخدم جديد</button>
+</div>`+navbar('');}
+function openUserSheet(id){const u=id?DB.users.find(x=>x.id===id):null;
+sheet(u?'تعديل مستخدم':'مستخدم جديد',`
+<div class="field"><div class="lbl">الاسم</div><input id="uf-name" value="${u?esc(u.name):''}" placeholder="مثال: أحمد"></div>
+<div class="field"><div class="lbl">${u?'رقم سري جديد (سيبه فاضي لو مش عايز تغيّره)':'رقم سري (٤ أرقام أو أكتر)'}</div><input id="uf-pin" type="password" inputmode="numeric" autocomplete="off"></div>
+<div class="lbl" style="margin:4px 2px 8px">الصلاحيات</div>
+${PERMS.map(([k,l])=>`<label class="set-row" style="cursor:pointer"><input type="checkbox" id="uf-p-${k}" ${u&&u.perms&&u.perms[k]?'checked':''} style="width:18px;height:18px;accent-color:var(--green)"> <span>${l}</span></label>`).join('')}
+<button class="btn btn-p" style="width:100%;margin-top:10px" onclick="saveUser('${id||''}')">${u?'حفظ ✓':'ضيف المستخدم ✓'}</button>
+${u&&!u.owner?`<button class="btn-danger" onclick="closeSheet();if(confirm('هتمسح المستخدم ده نهائي. متأكد؟')){DB.users=DB.users.filter(x=>x.id!=='${id}');save();render();toast('اتمسح');}">مسح المستخدم</button>`:''}`);}
+async function saveUser(id){const name=($('#uf-name')?.value||'').trim();const pin=($('#uf-pin')?.value||'').trim();
+if(!name){toast('اكتب الاسم');return;}
+const perms={};PERMS.forEach(([k])=>{const el=document.getElementById('uf-p-'+k);perms[k]=el&&el.checked?1:0;});
+if(id){const u=DB.users.find(x=>x.id===id);if(!u)return;u.name=name;u.perms=perms;
+ if(pin){if(pin.length<4){toast('الرقم السري لازم ٤ على الأقل');return;}u.pinH=await pinHash(pin);}
+ save();closeSheet();render();toast('اتحفظ ✓');return;}
+if(pin.length<4){toast('اكتب رقم سري ٤ أرقام أو أكتر');return;}
+DB.users.push({id:uid(),name,pinH:await pinHash(pin),owner:false,active:true,perms});
+save();closeSheet();render();toast('المستخدم اتضاف ✓');}
+function toggleUser(id){const u=DB.users.find(x=>x.id===id);if(!u||u.owner)return;u.active=!u.active;save();
+if(!u.active&&curUser&&curUser.id===id){logout();toast('الحساب اتوقف');return;}
+render();toast(u.active?'الحساب اتفعّل ✓':'الحساب اتوقف');}
+function openMyPinSheet(){sheet('تغيير الرقم السري',`
+<div class="field"><div class="lbl">الرقم السري الحالي</div><input id="mp-old" type="password" inputmode="numeric" autocomplete="off"></div>
+<div class="field"><div class="lbl">الرقم السري الجديد</div><input id="mp-new" type="password" inputmode="numeric" autocomplete="off"></div>
+<div class="field"><div class="lbl">تأكيد الجديد</div><input id="mp-new2" type="password" inputmode="numeric" autocomplete="off"></div>
+<button class="btn btn-p" style="width:100%" onclick="doMyPin()">غيّر الرقم ✓</button>`);}
+async function doMyPin(){const o=($('#mp-old')?.value||'').trim();const n1=($('#mp-new')?.value||'').trim();const n2=($('#mp-new2')?.value||'').trim();
+if(await pinHash(o)!==curUser.pinH){toast('الرقم الحالي غلط');return;}
+if(n1.length<4){toast('الرقم الجديد لازم ٤ على الأقل');return;}
+if(n1!==n2){toast('التأكيد مش مطابق');return;}
+curUser.pinH=await pinHash(n1);const u=DB.users.find(x=>x.id===curUser.id);if(u)u.pinH=curUser.pinH;
+save();closeSheet();toast('الرقم السري اتغيّر ✓');}
 /* ============ صور الأصناف (تخزين محلي IndexedDB) ============ */
 const PHOTOS={
  db:null,
@@ -453,7 +502,7 @@ DB.invoices.push(inv);save();
 o.status='done';closeSheet();
 toast('اتحولت لفاتورة #'+inv.num.toLocaleString(AR)+' ✓');
 go('#/customers/'+c.id);}
-function delOrder(id){sheet('مسح الطلب',`<div class="alert" style="margin-top:0;background:var(--red-soft);border-color:#EFC9C5"><span style="color:var(--red)">${ic('alert')}</span><div class="tx" style="color:var(--red)">الطلب هيتمسح نهائي ومش هيقدر يرجع تاني. لو عايز تخبيه من غير مسح، اختار «إلغاء» بدلها.</div></div>
+function delOrder(id){if(!can('del')){toast('مش مسموح ليك تمسح — كلم صاحب المحل');return;}sheet('مسح الطلب',`<div class="alert" style="margin-top:0;background:var(--red-soft);border-color:#EFC9C5"><span style="color:var(--red)">${ic('alert')}</span><div class="tx" style="color:var(--red)">الطلب هيتمسح نهائي ومش هيقدر يرجع تاني. لو عايز تخبيه من غير مسح، اختار «إلغاء» بدلها.</div></div>
 <button class="btn btn-p" style="background:var(--red);width:100%" onclick="delOrderGo('${id}')">امسح نهائي</button>
 <button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="closeSheet()">ارجع</button>`);}
 async function delOrderGo(id){closeSheet();try{await SB.deleteOrder(id);shopOrders=(shopOrders||[]).filter(o=>String(o.id)!==String(id));render();toast('الطلب اتمسح نهائي ✓');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
@@ -499,7 +548,7 @@ return a.sort((x,y)=>new Date(y.date)-new Date(x.date));}
 let state={cat:'الكل',q:'',cq:'',sq:''};
 function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2400);}
 function navbar(active){const it=(n,l,r)=>`<button class="nav-it${n===active?' on':''}" onclick="go('${r}')"><div class="ic">${ic(n)}</div><div class="tx">${l}</div></button>`;
-return `<div class="navbar">${it('home','الرئيسية','#/')}${it('box','الأصناف','#/products')}<div class="fab-wrap"><button class="fab" onclick="go('#/invoice')">${ic('plus',26)}</button><div class="tx">فاتورة</div></div>${it('users','الزباين','#/customers')}${it('truck','الموردين','#/suppliers')}</div>`;}
+return `<div class="navbar">${it('home','الرئيسية','#/')}${can('products')?it('box','الأصناف','#/products'):''}${can('invoice')?`<div class="fab-wrap"><button class="fab" onclick="go('#/invoice')">${ic('plus',26)}</button><div class="tx">فاتورة</div></div>`:''}${can('customers')?it('users','الزباين','#/customers'):''}${can('suppliers')?it('truck','الموردين','#/suppliers'):''}</div>`;}
 function appbar(hello,shop,right){return `<div class="appbar"><div>${hello?`<div class="hello">${hello}</div>`:''}<div class="shop">${shop}</div></div>${right||''}</div>`;}
 function gearBtn(){return `<button class="avatar" style="background:var(--ink)" onclick="go('#/settings')">${ic('gear',20)}</button>`;}
 function backBtn(r){return `<button class="back" onclick="go('${r}')">${ic('chev',16)} رجوع</button>`;}
@@ -507,7 +556,7 @@ function sheet(title,body,onclose){const o=document.createElement('div');o.class
 o.innerHTML=`<div class="sheet"><div class="sheet-wrap"><button class="x" onclick="closeSheet()">${ic('x')}</button><div class="st">${title}</div>${body}</div></div>`;
 $('#overlay-root').appendChild(o);}
 function closeSheet(){$('#overlay-root').innerHTML='';}
-function confirmSheet(msg,btnLabel,onYes){sheet('تأكيد',`<p style="text-align:center;font-size:14px;font-weight:700;margin-bottom:6px">${msg}</p>
+function confirmSheet(msg,btnLabel,onYes){if(!can('del')){toast('مش مسموح ليك تمسح — كلم صاحب المحل');return;}sheet('تأكيد',`<p style="text-align:center;font-size:14px;font-weight:700;margin-bottom:6px">${msg}</p>
 <button class="btn btn-p" style="background:var(--red);width:100%;margin-top:14px" id="cf-yes">${btnLabel}</button>
 <button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="closeSheet()">لأ، ارجع</button>`);
 $('#cf-yes').onclick=()=>{closeSheet();onYes();};}
@@ -853,15 +902,12 @@ SB.save();SB.token=null;shopOrders=null;shopOrdersAt=0;closeSheet();render();toa
 function copyStoreLink(){const u=storeUrl();
 const done=()=>toast('اللينك اتنسخ ✓ — ابعته لزباينك');
 if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(done).catch(()=>{prompt('انسخ اللينك ده:',u);});}else{prompt('انسخ اللينك ده:',u);}}
-function vSettings(){return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">الإعدادات</div></div></div>
+function vSettings(){const full=can('settings');return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">الإعدادات</div></div></div>
 <div class="content">
-<div class="field"><div class="lbl">اسم المحل</div><input id="st-shop" value="${esc(DB.settings.shopName)}"></div>
+${full?`<div class="field"><div class="lbl">اسم المحل</div><input id="st-shop" value="${esc(DB.settings.shopName)}"></div>
 <div class="field"><div class="lbl">اسمك (للتحية في الرئيسية)</div><input id="st-owner" value="${esc(DB.settings.ownerName||'')}" placeholder="الحاج محمود"></div>
 <div class="field"><div class="lbl">موبايل المحل (واتساب — بيظهر للزباين في المتجر)</div><input id="st-phone" value="${esc(DB.settings.phone||'')}" placeholder="01xxxxxxxxx" inputmode="tel" style="direction:ltr;text-align:right"></div>
 <button class="btn btn-p" style="width:100%" onclick="DB.settings.shopName=$('#st-shop').value.trim()||'محلي';DB.settings.ownerName=$('#st-owner').value.trim();DB.settings.phone=$('#st-phone').value.trim();save();render();toast('اتحفظ ✓')">حفظ ✓</button>
-<div class="sec-title">قفل البرنامج</div>
-${localStorage.getItem(PIN_KEY)?`<button class="set-row" onclick="openPinSheet('change')">${ic('lock')}<span>غيّر رقم القفل<span class="s" style="display:block">البرنامج متقفل — بيتفتح برقمك بس</span></span></button>
-<button class="set-row" style="color:var(--red)" onclick="openPinSheet('remove')">${ic('x')}<span>شيل القفل</span></button>`:`<button class="set-row" onclick="openPinSheet('set')">${ic('lock')}<span>اقفل البرنامج برقم<span class="s" style="display:block">كل ما تفتح البرنامج هيطلب الرقم — تأمين لبياناتك لو حد مسك الموبايل</span></span></button>`}
 <div class="sec-title">المتجر الإلكتروني</div>
 ${shopSettingsHTML()}
 <div class="sec-title" style="font-size:13px;margin-top:2px">الدليفري</div>
@@ -881,15 +927,20 @@ ${paySettingsHTML()}
 <button class="set-row" onclick="exportPurchases()">${ic('download')}<span>التوريدات<span class="s" style="display:block">كل البضاعة اللي دخلت من الموردين</span></span></button>
 <button class="set-row" onclick="exportParties()">${ic('download')}<span>أرصدة الزباين والموردين<span class="s" style="display:block">مين عليه كام ومين لك عنده</span></span></button>
 <div class="sec-title">منطقة الخطر</div>
-<button class="set-row" style="color:var(--red)" onclick="openResetSheet()">${ic('trash')}<span>امسح كل البيانات وابدأ من جديد</span></button>
+<button class="set-row" style="color:var(--red)" onclick="openResetSheet()">${ic('trash')}<span>امسح كل البيانات وابدأ من جديد</span></button>`:''}
+<div class="sec-title">المستخدمين والأمان</div>
+<div class="set-row" style="cursor:default">${ic('users')}<span>الحساب الحالي: <b>${esc(curUser.name)}</b>${curUser.owner?' 👑':''}<span class="s" style="display:block">${curUser.owner?'كل الصلاحيات':permSummary(curUser)}</span></span></div>
+${curUser.owner?`<button class="set-row" onclick="go('#/users')">${ic('users')}<span>إدارة المستخدمين<span class="s" style="display:block">ضيف حسابات للعاملين معاك، فعّل/وقّف، وحدد صلاحيات كل واحد</span></span></button>`:''}
+<button class="set-row" onclick="openMyPinSheet()">${ic('lock')}<span>غيّر الرقم السري بتاعك</span></button>
+<button class="set-row" style="color:var(--red)" onclick="logout()">${ic('x')}<span>تسجيل خروج</span></button>
 <div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · النسخة التانية · بياناتك متخزنة على جهازك بس</div>
 </div>`+navbar('home');}
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
 const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='نسخة-احتياطية-'+todayStr()+'.json';a.click();toast('النسخة نزلت ✓');}
 function importData(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
-r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.products||!d.settings)throw 0;if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;DB=d;save();render();toast('النسخة رجعت ✓');}catch(e){toast('الملف ده مش نسخة صحيحة');}};
+r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.products||!d.settings)throw 0;if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;if(!Array.isArray(d.users))d.users=[];if(!Array.isArray(d.movements))d.movements=[];DB=d;save();curUser=null;sessionStorage.removeItem('mahal_cur');render();toast('النسخة رجعت ✓ — سجّل دخول من جديد');}catch(e){toast('الملف ده مش نسخة صحيحة');}};
 r.readAsText(f);}
-function openResetSheet(){
+function openResetSheet(){if(!curUser||!curUser.owner){toast('ده للمالك بس');return;}
 sheet('مسح كل البيانات',`
 <div class="alert" style="margin-top:0;background:var(--red-soft);border-color:#EFC9C5"><span style="color:var(--red)">${ic('alert')}</span><div class="tx" style="color:var(--red)">ده هيمسح كل حاجة: الأصناف والفواتير والزباين والموردين والمسودات، ويرجع البرنامج للبداية من أول وجديد. مفيش رجوع بعدها.</div></div>
 <div class="field" style="margin-top:13px"><div class="lbl">للتأكيد، اكتب الجملة دي: «امسح كل حاجه»</div><input id="reset-confirm" placeholder="امسح كل حاجه" autocomplete="off"></div>
@@ -900,7 +951,7 @@ if(inp&&btn){inp.oninput=()=>{const okk=inp.value.trim().replace(/ة/g,'ه')==='
 setTimeout(()=>inp&&inp.focus(),60);}
 function doFullReset(){const inp=$('#reset-confirm');const okk=inp&&inp.value.trim().replace(/ة/g,'ه')==='امسح كل حاجه';
 if(!okk){toast('اكتب الجملة صح الأول');return;}
-closeSheet();DB=seed();save();invDraft=null;purDraft=null;go('#/');render();toast('اتمسح كل حاجة ورجعنا للبداية');}
+closeSheet();DB=seed();save();invDraft=null;purDraft=null;curUser=null;sessionStorage.removeItem('mahal_cur');go('#/');render();toast('اتمسح كل حاجة ورجعنا للبداية — اعمل حساب المالك من جديد');}
 function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 function downloadCSV(name,rows){const csv='\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
 const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'-'+todayStr()+'.csv';a.click();toast('الملف نزل ✓ — يفتح في Excel');}
@@ -922,26 +973,28 @@ downloadCSV('الأرصدة',rows);}
 /* ============ router ============ */
 function go(h){location.hash=h;}
 function render(){const h=location.hash||'#/';const app=$('#app');
-if(!unlocked){app.innerHTML=vLock();return;}
+if(!DB.users.length){app.innerHTML=vSetup();return;}
+if(!curUser){app.innerHTML=vLogin();return;}
 let html;
 if(h==='#/'||h==='#'){closeSheet();html=vDash();}
-else if(h==='#/products'){html=vProducts();}
-else if(h==='#/customers'){html=vCustomers();}
-else if(h.startsWith('#/customers/')){html=vCustDetail(h.split('/')[2]);}
-else if(h==='#/suppliers'){html=vSuppliers();}
-else if(h.startsWith('#/suppliers/')){html=vSuppDetail(h.split('/')[2]);}
-else if(h==='#/invoice'){html=vInvoice(null);}
-else if(h.startsWith('#/invoice/')){html=vInvoice(h.split('/')[2]);}
-else if(h==='#/purchase'){html=vPurchase(null);}
-else if(h.startsWith('#/purchase/')){html=vPurchase(h.split('/')[2]);}
+else if(h==='#/products'){html=can('products')?vProducts():vNoPerm();}
+else if(h==='#/customers'){html=can('customers')?vCustomers():vNoPerm();}
+else if(h.startsWith('#/customers/')){html=can('customers')?vCustDetail(h.split('/')[2]):vNoPerm();}
+else if(h==='#/suppliers'){html=can('suppliers')?vSuppliers():vNoPerm();}
+else if(h.startsWith('#/suppliers/')){html=can('suppliers')?vSuppDetail(h.split('/')[2]):vNoPerm();}
+else if(h==='#/invoice'){html=can('invoice')?vInvoice(null):vNoPerm();}
+else if(h.startsWith('#/invoice/')){html=can('invoice')?vInvoice(h.split('/')[2]):vNoPerm();}
+else if(h==='#/purchase'){html=can('suppliers')?vPurchase(null):vNoPerm();}
+else if(h.startsWith('#/purchase/')){html=can('suppliers')?vPurchase(h.split('/')[2]):vNoPerm();}
 else if(h==='#/settings'){html=vSettings();}
-else if(h==='#/orders'){html=vOrders();}
+else if(h==='#/orders'){html=can('orders')?vOrders():vNoPerm();}
+else if(h==='#/users'){html=vUsers();}
 else{html=vDash();}
 app.innerHTML=html;window.scrollTo(0,0);
 hydratePhotos();
 if((h==='#/'||h==='#')&&SB.ready()&&Date.now()-shopOrdersAt>60000){refreshOrders(true);}}
-window.addEventListener('hashchange',()=>{if(unlocked)render();});
-if(unlocked){render();}else{$('#app').innerHTML=vLock();}
+window.addEventListener('hashchange',()=>{render();});
+render();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 </body>
