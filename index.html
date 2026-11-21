@@ -283,6 +283,7 @@ if(!DB.nextNum)DB.nextNum=1001;
 if(!DB.settings.pay)DB.settings.pay={cash:{on:true},vf:{on:false,num:''},insta:{on:false,num:''},bank:{on:false,num:''}};
 if(DB.settings.deliveryFee==null)DB.settings.deliveryFee=0;
 if(!Array.isArray(DB.settings.zones))DB.settings.zones=[];
+if(DB.settings.deliveryOn==null)DB.settings.deliveryOn=true;
 if(!DB.drafts)DB.drafts=[];
 function save(){localStorage.setItem(KEY,JSON.stringify(DB));}
 save();
@@ -360,9 +361,9 @@ async pushProducts(){await this.login();
  localStorage.setItem('mahal_photo_up',JSON.stringify(ups));
  const rows=DB.products.map(p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,stock:p.stock,photo_url:p.photo?this.photoUrlFor(p):null,updated_at:new Date().toISOString()}));
  await this.req('products',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
- const info=[{id:1,shop_name:DB.settings.shopName,owner_name:DB.settings.ownerName||'',phone:DB.settings.phone||'',payment:DB.settings.pay||{cash:{on:true}},delivery_fee:DB.settings.deliveryFee||0,zones:DB.settings.zones||[],updated_at:new Date().toISOString()}];
+ const info=[{id:1,shop_name:DB.settings.shopName,owner_name:DB.settings.ownerName||'',phone:DB.settings.phone||'',payment:DB.settings.pay||{cash:{on:true}},delivery_fee:DB.settings.deliveryFee||0,zones:DB.settings.zones||[],delivery_on:DB.settings.deliveryOn!==false,updated_at:new Date().toISOString()}];
  try{await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}
- catch(e){delete info[0].payment;delete info[0].delivery_fee;delete info[0].zones;await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}
+ catch(e){delete info[0].payment;delete info[0].delivery_fee;delete info[0].zones;delete info[0].delivery_on;await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}
  const liveIds=DB.products.map(p=>p.id);
  if(liveIds.length){await this.req('products?id=not.in.('+liveIds.map(encodeURIComponent).join(',')+')',{method:'DELETE'});}
  return rows.length;},
@@ -809,6 +810,7 @@ ${localStorage.getItem(PIN_KEY)?`<button class="set-row" onclick="openPinSheet('
 <div class="sec-title">المتجر الإلكتروني</div>
 ${shopSettingsHTML()}
 <div class="sec-title" style="font-size:13px;margin-top:2px">الدليفري</div>
+<label class="set-row" style="cursor:pointer"><input type="checkbox" ${DB.settings.deliveryOn!==false?'checked':''} onchange="DB.settings.deliveryOn=this.checked;save();render()" style="width:18px;height:18px;accent-color:var(--green)"> <span>الدليفري شغال<span class="s" style="display:block;font-weight:600">لو قفلته المتجر يبقى استلام من المحل بس — ومناطقك وأسعارك بتتحفظ</span></span></label>
 <div class="lbl" style="font-size:12.5px;font-weight:800;color:var(--ink);margin:2px 2px 7px">مناطق التوصيل وأسعارها — الزبون يختار منطقته في المتجر وسعرها يتحسب لوحده</div>
 ${zonesHTML()}
 <div class="field" style="margin-top:10px"><div class="lbl">سعر التوصيل الافتراضي (يتحسب لو القايمة فوق فاضية — 0 يعني مجاني)</div><input type="number" min="0" step="any" inputmode="decimal" value="${DB.settings.deliveryFee||0}" onchange="DB.settings.deliveryFee=Math.max(0,+this.value||0);save();toast('اتحفظ ✓')" style="direction:ltr;text-align:right"></div>
