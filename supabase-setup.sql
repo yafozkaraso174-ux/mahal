@@ -98,3 +98,29 @@ alter table orders add column if not exists payment text;
 alter table orders add column if not exists address text;
 alter table orders add column if not exists delivery_fee numeric not null default 0;
 alter table orders add column if not exists zone text;
+
+-- ============================================================
+-- تحديث ٢١ نوفمبر ٢٠٢٦ (التاني): حسابات المستخدمين على كل الأجهزة
+-- شغّل الأسطر دي مرة واحدة عشان الحسابات اللي بتعملها في البرنامج
+-- تظهر على الموبايل واللابتوب وأي جهاز تاني
+-- ============================================================
+create table if not exists shop_users (
+  id text primary key,
+  name text not null,
+  pin_h text not null,
+  owner boolean not null default false,
+  active boolean not null default true,
+  perms jsonb,
+  updated_at timestamptz default now()
+);
+
+alter table shop_users enable row level security;
+
+-- قراءة قايمة الحسابات متاحة للكل عشان شاشة الدخول تقدر تعرضها قبل تسجيل الدخول
+-- (الرقم السري متخزن كـ hash مش كنص واضح)
+drop policy if exists "public read shop_users" on shop_users;
+create policy "public read shop_users" on shop_users for select to public using (true);
+
+-- الإضافة والتعديل والمسح للحساب المسجل في Authentication بس (حسابك إنت)
+drop policy if exists "owner all shop_users" on shop_users;
+create policy "owner all shop_users" on shop_users for all to authenticated using (true) with check (true);
