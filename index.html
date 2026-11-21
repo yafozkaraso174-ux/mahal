@@ -427,8 +427,9 @@ async login(){this.load();if(this.token&&Date.now()<this.tokenExp)return;
  if(!this.cfg.email||!this.cfg.pass)throw new Error('no-auth');
  const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':this.cfg.anon,'Content-Type':'application/json'},body:JSON.stringify({email:this.cfg.email,password:this.cfg.pass})});
  if(!r.ok)throw new Error('auth-failed');const j=await r.json();this.token=j.access_token;this.tokenExp=Date.now()+((j.expires_in||3600)-120)*1000;},
-async req(path,opt){opt=opt||{};this.load();const h=Object.assign({'apikey':this.cfg.anon,'Authorization':'Bearer '+(this.token||this.cfg.anon)},opt.headers||{});
- const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/rest/v1/'+path,Object.assign({},opt,{headers:h}));
+async req(path,opt){opt=opt||{};this.load();const anon=this.cfg.anon||SB_DEF.anon,base=(this.cfg.url||SB_DEF.url).replace(/\/$/,'');
+ const h=Object.assign({'apikey':anon,'Authorization':'Bearer '+(this.token||anon)},opt.headers||{});
+ const r=await fetch(base+'/rest/v1/'+path,Object.assign({},opt,{headers:h}));
  if(!r.ok)throw new Error('req-failed:'+r.status);if(r.status===204)return null;const t=await r.text();return t?JSON.parse(t):null;},
 photoUrlFor(p){return this.cfg.url.replace(/\/$/,'')+'/storage/v1/object/public/product-photos/'+encodeURIComponent(p.id)+'.jpg?v='+(p.photoVer||1);},
 async uploadPhoto(id,blob){const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/storage/v1/object/product-photos/'+encodeURIComponent(id)+'.jpg',{method:'POST',headers:{'apikey':this.cfg.anon,'Authorization':'Bearer '+this.token,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
@@ -453,14 +454,14 @@ async updateOrder(id,items,total){await this.login();await this.req('orders?id=e
 let shopOrders=null,shopOrdersErr=false,shopOrdersAt=0;
 /* ---- مزامنة الحسابات بين الأجهزة (جدول shop_users) ---- */
 let usersPulledAt=0;const USERS_SYNC_KEY='mahal_users_synced';
-async function pushUsers(){if(!SB.ready())return;
+async function pushUsers(){if(!SB.ready()||!SB.cfg.email||!SB.cfg.pass)return;
  try{await SB.login();const now=new Date().toISOString();
  const rows=DB.users.map(u=>{if(!u.upd)u.upd=now;return{id:u.id,name:u.name,pin_h:u.pinH,owner:!!u.owner,active:!!u.active,perms:u.perms||{},updated_at:u.upd};});
  await SB.req('shop_users',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
  const ids=DB.users.map(u=>u.id);
  if(ids.length)await SB.req('shop_users?id=not.in.('+ids.map(encodeURIComponent).join(',')+')',{method:'DELETE'});
  localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(ids.map(String)));}catch(e){}}
-async function pullUsers(){if(!SB.ready())return false;usersPulledAt=Date.now();
+async function pullUsers(){SB.load();if(!(SB.cfg.url||SB_DEF.url))return false;usersPulledAt=Date.now();
  let rows;try{rows=await SB.req('shop_users?select=*');}catch(e){return false;}
  if(!Array.isArray(rows))return false;
  let changed=false,needPush=false;let synced=[];
@@ -483,13 +484,14 @@ async function pullUsers(){if(!SB.ready())return false;usersPulledAt=Date.now();
 /* ---- نسخ احتياطي تلقائي على السحابة (جدول backups) ---- */
 let backupTimer=null;
 function scheduleCloudBackup(){clearTimeout(backupTimer);backupTimer=setTimeout(pushCloudBackup,90000);}
-async function pushCloudBackup(){if(!SB.ready())return;
+async function pushCloudBackup(){if(!SB.ready()||!SB.cfg.email||!SB.cfg.pass)return;
  try{await SB.login();
  await SB.req('backups',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify([{id:1,data:DB,updated_at:new Date().toISOString()}])});
  localStorage.setItem('mahal_last_backup',new Date().toISOString());
  const el=document.getElementById('bk-status');if(el)el.textContent=backupStatusText();
  }catch(e){}}
-function backupStatusText(){const t=localStorage.getItem('mahal_last_backup');return t?('آخر نسخة تلقائية: '+relDate(t)):'النسخ التلقائي شغال — أول نسخة هتترفع بعد أول تعديل';}
+function backupStatusText(){SB.load();if(!(SB.cfg.url&&SB.cfg.anon&&SB.cfg.email&&SB.cfg.pass))return 'النسخ التلقائي محتاج بيانات المتجر كاملة (مع الإيميل والباسورد) من قسم المتجر تحت';
+const t=localStorage.getItem('mahal_last_backup');return t?('آخر نسخة تلقائية: '+relDate(t)):'النسخ التلقائي شغال — أول نسخة هتترفع بعد أول تعديل';}
 async function restoreCloudBackup(){if(!SB.ready()){toast('المتجر مش متوصل — حط بياناته من الإعدادات الأول');return;}
  toast('بندوّر على آخر نسخة…');
  try{await SB.login();const rows=await SB.req('backups?id=eq.1&select=data,updated_at');
@@ -1046,7 +1048,7 @@ else{html=vDash();}
 app.innerHTML=html;window.scrollTo(0,0);
 hydratePhotos();
 if((h==='#/'||h==='#')&&SB.ready()&&Date.now()-shopOrdersAt>60000){refreshOrders(true);}
-if(SB.ready()&&Date.now()-usersPulledAt>60000){pullUsers().then(ch=>{if(ch)render();});}}
+if(Date.now()-usersPulledAt>60000){pullUsers().then(ch=>{if(ch)render();});}}
 window.addEventListener('hashchange',()=>{render();});
 render();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
