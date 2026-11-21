@@ -306,7 +306,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r16';
+const APP_VER='2026-11-22r17';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -490,9 +490,10 @@ async pushProducts(){await this.ensureSession();
  localStorage.setItem('mahal_photo_up',JSON.stringify(ups));
  const rows=DB.products.map(p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,stock:p.stock,photo_url:p.photo?this.photoUrlFor(p):null,updated_at:new Date().toISOString()}));
  await this.req('products',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
+ if(typeof can==='function'&&can('settings')){
  const info=[{id:1,shop_name:DB.settings.shopName,owner_name:DB.settings.ownerName||'',phone:DB.settings.phone||'',payment:DB.settings.pay||{cash:{on:true}},delivery_fee:DB.settings.deliveryFee||0,zones:DB.settings.zones||[],delivery_on:DB.settings.deliveryOn!==false,updated_at:new Date().toISOString()}];
  try{await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}
- catch(e){delete info[0].payment;delete info[0].delivery_fee;delete info[0].zones;delete info[0].delivery_on;await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}
+ catch(e){delete info[0].payment;delete info[0].delivery_fee;delete info[0].zones;delete info[0].delivery_on;await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}}
  const liveIds=DB.products.map(p=>p.id);
  if(liveIds.length){await this.req('products?id=not.in.('+liveIds.map(encodeURIComponent).join(',')+')',{method:'DELETE'});}
  return rows.length;},
@@ -600,6 +601,7 @@ async function syncShopNow(){if(!SB.ready()){toast('حط بيانات المتج
 toast('بنزّل الأصناف على المتجر…');
 try{const n=await SB.pushProducts();toast('اتنزّل '+n.toLocaleString(AR)+' صنف على المتجر ✓');}catch(e){toast(e.message==='no-auth'?'سجّل دخولك الأول':'في مشكلة في الاتصال — جرب تاني');}}
 async function refreshOrders(quiet){if(!SB.ready()){shopOrders=null;return;}
+if(!can('orders')){shopOrders=[];shopOrdersErr=false;return;}
 try{shopOrders=await SB.fetchOrders();shopOrdersErr=false;}catch(e){shopOrdersErr=true;}
 shopOrdersAt=Date.now();
 if(!quiet){render();}else{const sec=$('#shop-sec');if(sec)sec.innerHTML=shopSectionHTML();}}
@@ -654,7 +656,7 @@ function delOrder(id){if(!can('del')){toast('مش مسموح ليك تمسح —
 <button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="closeSheet()">ارجع</button>`);}
 async function delOrderGo(id){closeSheet();try{await SB.deleteOrder(id);shopOrders=(shopOrders||[]).filter(o=>String(o.id)!==String(id));render();toast('الطلب اتمسح نهائي ✓');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
 function newOrdersCount(){return (shopOrders||[]).filter(o=>o.status==='new').length;}
-function shopSectionHTML(){if(!SB.ready())return '';const n=newOrdersCount();let orderRow;
+function shopSectionHTML(){if(!SB.ready()||!can('orders'))return '';const n=newOrdersCount();let orderRow;
 if(shopOrders===null)orderRow=`<button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block">بنجهّز الطلبات…</span></span></button>`;
 else if(shopOrdersErr)orderRow=`<button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block;color:var(--red)">مفيش اتصال دلوقتي — هنحاول تاني لما تفتح الطلبات</span></span></button>`;
 else orderRow=`<button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block">${n?('عندك '+n.toLocaleString(AR)+' طلب جديد مستني'):'مفيش طلبات جديدة'}</span></span>${n?`<span class="badge b-red" style="font-size:12px">${n.toLocaleString(AR)}</span>`:''}</button>`;
