@@ -44,6 +44,7 @@ input,textarea{font-family:inherit;font-size:15px}
 .dch{flex:1;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:11px 6px;font-size:13px;font-weight:800;color:var(--ink);font-family:inherit}
 .dch.on{border-color:var(--green);background:var(--green-soft);color:var(--green)}
 .dch.wide{width:100%;margin-bottom:7px;text-align:right;padding:12px 14px}
+.zsel{width:100%;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14px;color:var(--ink);outline:none;font-family:inherit;font-weight:700}
 .payinfo{background:#FDF3E3;border:1px solid #F0DFC0;border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:700;color:var(--ink);margin-top:2px;line-height:1.7}
 .cartbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 35%);z-index:15}
 .cartbar button{width:100%;background:var(--green);color:#fff;border-radius:16px;padding:15px 0;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 16px rgba(28,122,84,.3)}
@@ -191,7 +192,7 @@ function payMethods(){const m=[];if(!payCfg)return m;
  if(payCfg.bank&&payCfg.bank.on&&payCfg.bank.num)m.push({k:'bank',t:'تحويل بنكي',d:'حوّل الإجمالي على: '+payCfg.bank.num});
  return m;}
 function zoneList(){return (Array.isArray(shopInfo.zones)?shopInfo.zones:[]).filter(z=>z&&z.name);}
-function pickZone(i){const z=zoneList()[i];if(!z)return;CO.zone=z.name;openCart();}
+function pickZone(i){const z=zoneList()[i];CO.zone=z?z.name:'';openCart();}
 function openCart(){const items=Object.entries(cart).map(([id,q])=>({p:products.find(x=>x.id===id),q})).filter(x=>x.p);
 const methods=payMethods();const useNew=methods.length>0;
 if(useNew&&!methods.find(m=>m.k===CO.pay))CO.pay=methods[0].k;
@@ -212,7 +213,7 @@ ${fee>0?`<div class="trow"><span>الأصناف</span><span>${fmt(cartTotal())} 
 ${useNew?`<div class="field"><div class="lbl">طريقة الاستلام</div><div style="display:flex;gap:8px">
 <button class="dch ${CO.del==='delivery'?'on':''}" onclick="CO.del='delivery';openCart()">🚚 دليفري</button>
 <button class="dch ${CO.del==='pickup'?'on':''}" onclick="CO.del='pickup';openCart()">🏪 استلام من المحل</button></div></div>
-${CO.del==='delivery'&&zones.length?`<div class="field"><div class="lbl">منطقة التوصيل</div>${zones.map((z,i)=>`<button class="dch wide ${CO.zone===z.name?'on':''}" onclick="pickZone(${i})">${esc(z.name)}<span style="float:left;color:${CO.zone===z.name?'var(--green)':'var(--muted)'}">${fmt(z.fee)} ج</span></button>`).join('')}</div>`:''}
+${CO.del==='delivery'&&zones.length?`<div class="field"><div class="lbl">منطقة التوصيل</div><select class="zsel" onchange="pickZone(this.selectedIndex-1)"><option ${CO.zone?'':'selected'} disabled>اختار منطقتك…</option>${zones.map(z=>`<option value="${esc(z.name)}" ${CO.zone===z.name?'selected':''}>${esc(z.name)} — ${fmt(z.fee)} ج</option>`).join('')}</select></div>`:''}
 ${CO.del==='delivery'?`<div class="field"><div class="lbl">العنوان بالتفصيل</div><textarea id="ord-addr" rows="2" placeholder="اسم الشارع، رقم العمارة، الدور، وأقرب علامة مميزة…" oninput="CO.addr=this.value">${esc(CO.addr)}</textarea></div>`:''}
 <div class="field"><div class="lbl">ملاحظات (اختياري)</div><textarea id="ord-note" rows="1" placeholder="أي حاجة تحب تضيفها…" oninput="CO.note=this.value">${esc(CO.note)}</textarea></div>
 <div class="field"><div class="lbl">طريقة الدفع</div>${methods.map(m=>`<button class="dch wide ${CO.pay===m.k?'on':''}" onclick="CO.pay='${m.k}';openCart()">${m.t}</button>`).join('')}
