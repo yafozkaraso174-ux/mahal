@@ -582,8 +582,8 @@ ${can('stats')?`<div class="grid2">
 ${SB.ready()?`<div id="shop-sec">${shopSectionHTML()}</div>`:''}
 ${low.length?`<div class="alert"><span style="color:#9A6A14">${ic('alert')}</span><div class="tx">${low.slice(0,3).map(p=>`<b>${esc(p.name)}</b> باقي منه ${fmt(p.stock)} ${esc(p.unit)}`).join(' · ')} — عاوز تطلب توريد؟</div></div>`:''}
 ${drafts.length?`<div class="sec-title">مسودات فواتير</div>${drafts.map(draftRow).join('')}`:''}
-<div class="sec-title">آخر الحركات</div>
-${act.length?act.map(a=>actRow(a)).join(''):`<div class="empty"><div class="big">لسه مفيش حركات</div>اعمل أول فاتورة من الزرار الأخضر اللي تحت</div>`}
+${can('stats')?`<div class="sec-title">آخر الحركات</div>
+${act.length?act.map(a=>actRow(a)).join(''):`<div class="empty"><div class="big">لسه مفيش حركات</div>اعمل أول فاتورة من الزرار الأخضر اللي تحت</div>`}`:''}
 </div>`+navbar('home');}
 function greeting(){const h=new Date().getHours();const n=DB.settings.ownerName?(' يا '+esc(DB.settings.ownerName)):'';return h<12?'صباح الفل'+n:h<18?'مساء الفل'+n:'مساء الخير'+n;}
 function actRow(a){const m={inv:['receipt','var(--green-soft)','var(--green)'],pay:['cash','var(--blue-soft)','var(--blue)'],payout:['cash','var(--red-soft)','var(--red)'],pur:['truck','var(--amber-soft)','#9A6A14']}[a.kind];
