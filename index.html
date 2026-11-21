@@ -213,6 +213,7 @@ x:'<path d="M6 6l12 12M18 6 6 18"/>',
 lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
 store:'<path d="M4 9.5 5.5 4h13L20 9.5"/><path d="M4 9.5a2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0 2.4 2.4 0 0 0 4.8 0"/><path d="M5.5 11.5V20h13v-8.5"/><path d="M9.5 20v-5h5v5"/>',
 copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
+open:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M20 14v5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13A1.5 1.5 0 0 1 5.5 4H10"/>',
 wa:'<path d="M21 11.8a8.3 8.3 0 0 1-8.4 8.2c-1.4 0-2.8-.3-4-1L3 20.4l1.5-5A8.3 8.3 0 1 1 21 11.8z"/>',
 };
 const ic=(n,s)=>`<svg class="i"${s?` style="width:${s}px;height:${s}px"`:''} viewBox="0 0 24 24">${IC[n]||''}</svg>`;
@@ -341,10 +342,16 @@ shopOrdersAt=Date.now();
 if(!quiet){render();}else{const sec=$('#shop-sec');if(sec)sec.innerHTML=shopSectionHTML();}}
 async function markOrder(id,st){try{await SB.setOrderStatus(id,st);(shopOrders||[]).forEach(o=>{if(String(o.id)===String(id))o.status=st;});render();toast(st==='done'?'الطلب اتقفل ✓':'الطلب اتلغى');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');}}
 function newOrdersCount(){return (shopOrders||[]).filter(o=>o.status==='new').length;}
-function shopSectionHTML(){if(!SB.ready())return '';const n=newOrdersCount();
-if(shopOrders===null)return `<div class="sec-title">المتجر الإلكتروني</div><button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block">بنجهّز الطلبات…</span></span></button>`;
-if(shopOrdersErr)return `<div class="sec-title">المتجر الإلكتروني</div><button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block;color:var(--red)">مفيش اتصال دلوقتي — هنحاول تاني لما تفتح الطلبات</span></span></button>`;
-return `<div class="sec-title">المتجر الإلكتروني</div><button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block">${n?('عندك '+n.toLocaleString(AR)+' طلب جديد مستني'):'مفيش طلبات جديدة'}</span></span>${n?`<span class="badge b-red" style="font-size:12px">${n.toLocaleString(AR)}</span>`:''}</button>`;}
+function shopSectionHTML(){if(!SB.ready())return '';const n=newOrdersCount();let orderRow;
+if(shopOrders===null)orderRow=`<button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block">بنجهّز الطلبات…</span></span></button>`;
+else if(shopOrdersErr)orderRow=`<button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block;color:var(--red)">مفيش اتصال دلوقتي — هنحاول تاني لما تفتح الطلبات</span></span></button>`;
+else orderRow=`<button class="set-row" onclick="go('#/orders')">${ic('store')}<span>طلبات المتجر<span class="s" style="display:block">${n?('عندك '+n.toLocaleString(AR)+' طلب جديد مستني'):'مفيش طلبات جديدة'}</span></span>${n?`<span class="badge b-red" style="font-size:12px">${n.toLocaleString(AR)}</span>`:''}</button>`;
+return `<div class="sec-title">المتجر الإلكتروني</div>`+orderRow+storeRowHTML();}
+function storeRowHTML(){return `<div class="set-row" style="cursor:default">${ic('store')}<span>المعرض<span class="s" style="display:block">لينك متجر الزباين — شاركه معاهم وشوف المتجر زي ما هما شايفينه</span></span><button class="cbtn" style="flex:0 0 74px" onclick="shareStoreLink()">${ic('wa',14)} مشاركة</button><button class="cbtn" style="flex:0 0 62px;background:var(--green-soft);color:var(--green);margin-inline-start:6px" onclick="openStore()">${ic('open',14)} فتح</button></div>`;}
+function openStore(){window.open(storeUrl(),'_blank');}
+function shareStoreLink(){const u=storeUrl();
+if(navigator.share){navigator.share({title:'متجر '+((DB.settings&&DB.settings.shopName)||'المحل'),text:'اتفضل لينك متجرنا — اطلب اللي محتاجه منه:',url:u}).catch(()=>{});}
+else copyStoreLink();}
 function vOrders(){let body;
 if(!SB.ready()){body=`<div class="empty"><div class="big">المتجر لسه متوصلش</div>حط بيانات المتجر من الإعدادات الأول</div><button class="btn btn-p" style="width:100%" onclick="go('#/settings')">روح للإعدادات</button>`;}
 else if(shopOrders===null){body=`<div class="empty">بنحمّل الطلبات…</div>`;setTimeout(()=>refreshOrders(false),50);}
@@ -677,21 +684,22 @@ save();closeSheet();
 if(fromInvoice){if(isC&&invDraft){invDraft.customerId=id;const c=cust(id);if(c)invDraft.priceType=c.type;}if(!isC&&purDraft){purDraft.supplierId=id;}}
 render();toast('اتحفظ ✓');}
 /* ============ settings ============ */
+const SB_DEF={url:'https://ofqhrpkgxxbdrhuujgxt.supabase.co',anon:'sb_publishable_CH8nhDJQlV-5xsKYoCZRVg_mUoLsTQw'};
 function storeUrl(){return (location.origin||'')+String(location.pathname||'/').replace(/[^/]*$/,'')+'store.html';}
 function shopSettingsHTML(){SB.load();const c=SB.cfg||{};const sUrl=storeUrl();
 if(!SB.ready()){return `<div class="set-row" style="cursor:default"><span style="font-weight:600;color:var(--muted);font-size:12px;line-height:1.8">حط بيانات مشروع Supabase هنا مرة واحدة، والمتجر هيشتغل لوحده. البيانات دي بتتخزن على جهازك بس.</span></div>
-<div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||'')}" placeholder="https://xxxx.supabase.co" style="direction:ltr;text-align:left" autocomplete="off"></div>
-<div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
+<div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||SB_DEF.url)}" placeholder="https://xxxx.supabase.co" style="direction:ltr;text-align:left" autocomplete="off"></div>
+<div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||SB_DEF.anon)}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <div class="field"><div class="lbl">إيميل حساب سوبابيز بتاعك</div><input id="sb-email" value="${esc(c.email||'')}" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <div class="field"><div class="lbl">باسورد سوبابيز</div><input id="sb-pass" value="${esc(c.pass||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <button class="btn btn-p" style="width:100%" onclick="saveShopCfg()">حفظ بيانات المتجر ✓</button>`;}
-return `<div class="set-row" style="cursor:default">${ic('store')}<span>المتجر شغال<span class="s" style="display:block;direction:ltr;text-align:right">${esc(sUrl)}</span></span><button class="cbtn" style="flex:0 0 64px;background:var(--green-soft);color:var(--green)" onclick="copyStoreLink()">${ic('copy',14)} نسخ</button></div>
+return `<div class="set-row" style="cursor:default">${ic('store')}<span>المتجر شغال<span class="s" style="display:block;direction:ltr;text-align:right">${esc(sUrl)}</span></span><button class="cbtn" style="flex:0 0 62px" onclick="copyStoreLink()">${ic('copy',14)} نسخ</button><button class="cbtn" style="flex:0 0 62px;background:var(--green-soft);color:var(--green);margin-inline-start:6px" onclick="openStore()">${ic('open',14)} فتح</button></div>
 <button class="set-row" onclick="syncShopNow()">${ic('upload')}<span>نزّل الأصناف على المتجر<span class="s" style="display:block">حدّث الأسعار والكميات واسم المحل عند الزباين</span></span></button>
 <button class="set-row" onclick="go('#/orders')">${ic('receipt')}<span>طلبات المتجر<span class="s" style="display:block">شوف الطلبات الجديدة واقفلها</span></span></button>
 <button class="set-row" onclick="sheet('بيانات المتجر',document.getElementById('sb-cfg-tpl').innerHTML)">${ic('gear')}<span>تعديل بيانات الاتصال</span></button>
 <template id="sb-cfg-tpl">
-<div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||'')}" style="direction:ltr;text-align:left" autocomplete="off"></div>
-<div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
+<div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||SB_DEF.url)}" style="direction:ltr;text-align:left" autocomplete="off"></div>
+<div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||SB_DEF.anon)}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <div class="field"><div class="lbl">إيميل حساب سوبابيز</div><input id="sb-email" value="${esc(c.email||'')}" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <div class="field"><div class="lbl">باسورد سوبابيز</div><input id="sb-pass" value="${esc(c.pass||'')}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <button class="btn btn-p" style="width:100%" onclick="saveShopCfg()">حفظ ✓</button>
