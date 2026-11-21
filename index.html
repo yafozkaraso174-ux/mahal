@@ -93,6 +93,8 @@ button.row{cursor:pointer}
 .trow .paid{color:var(--green);font-weight:800}
 .trow .due{color:var(--red);font-weight:800}
 .trow input{width:110px;background:#F7F3EA;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:14px;font-weight:800;text-align:left;outline:none}
+.cost-in{width:74px;background:#F7F3EA;border:1px solid var(--line);border-radius:9px;padding:4px 8px;font-size:13px;font-weight:800;text-align:center;outline:none;color:var(--ink);font-family:inherit}
+.cost-in:focus{border-color:var(--green)}
 .cta{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 35%);display:flex;gap:10px;z-index:15}
 .btn{flex:1;border-radius:16px;padding:14px 0;text-align:center;font-size:14.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px}
 .btn-p{background:var(--green);color:#fff}
@@ -212,11 +214,12 @@ products:[
 ],
 customers:[{id:'c1',name:'مطعم تجريبي (امسحه لما تحط زباينك)',phone:'',type:'w'}],
 suppliers:[{id:'s1',name:'مورد تجريبي (امسحه لما تحط موردينك)',phone:''}],
-invoices:[],purchases:[],payments:[],nextNum:1001,
+invoices:[],purchases:[],payments:[],drafts:[],nextNum:1001,
 };}
 let DB;
 try{DB=JSON.parse(localStorage.getItem(KEY))||seed();}catch(e){DB=seed();}
 if(!DB.nextNum)DB.nextNum=1001;
+if(!DB.drafts)DB.drafts=[];
 function save(){localStorage.setItem(KEY,JSON.stringify(DB));}
 save();
 /* ============ derived ============ */
@@ -254,7 +257,7 @@ function confirmSheet(msg,btnLabel,onYes){sheet('تأكيد',`<p style="text-ali
 <button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="closeSheet()">لأ، ارجع</button>`);
 $('#cf-yes').onclick=()=>{closeSheet();onYes();};}
 /* ============ views ============ */
-function vDash(){const t=totals();const low=DB.products.filter(p=>p.stock<=p.lowAt);const act=activity().slice(0,6);
+function vDash(){const t=totals();const low=DB.products.filter(p=>p.stock<=p.lowAt);const act=activity().slice(0,6);const drafts=DB.drafts||[];
 const cur=DB.settings.currency||'جنيه';
 return appbar(greeting(),esc(DB.settings.shopName),gearBtn())+`
 <div class="content">
@@ -272,6 +275,7 @@ return appbar(greeting(),esc(DB.settings.shopName),gearBtn())+`
  <button class="act" onclick="openProductSheet()"><div class="ic" style="background:var(--red-soft);color:var(--red)">${ic('tag')}</div><div class="tx">صنف جديد</div></button>
 </div>
 ${low.length?`<div class="alert"><span style="color:#9A6A14">${ic('alert')}</span><div class="tx">${low.slice(0,3).map(p=>`<b>${esc(p.name)}</b> باقي منه ${fmt(p.stock)} ${esc(p.unit)}`).join(' · ')} — عاوز تطلب توريد؟</div></div>`:''}
+${drafts.length?`<div class="sec-title">مسودات فواتير</div>${drafts.map(draftRow).join('')}`:''}
 <div class="sec-title">آخر الحركات</div>
 ${act.length?act.map(a=>actRow(a)).join(''):`<div class="empty"><div class="big">لسه مفيش حركات</div>اعمل أول فاتورة من الزرار الأخضر اللي تحت</div>`}
 </div>`+navbar('home');}
@@ -351,7 +355,7 @@ function vInvoice(presetCust){if(!invDraft||invDraft._preset!==presetCust){invDr
 const d=invDraft;const c=cust(d.customerId);
 const total=d.items.reduce((s,it)=>s+it.qty*it.price,0);
 const paid=num(d.paid);const left=Math.max(total-paid,0);
-return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">فاتورة جديدة</div></div><div style="font-size:13px;color:var(--muted);font-weight:800">#${DB.nextNum.toLocaleString(AR)}</div></div>
+return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">${d._draftId?'إكمال مسودة':'فاتورة جديدة'}</div></div><div style="font-size:13px;color:var(--muted);font-weight:800">#${DB.nextNum.toLocaleString(AR)}</div></div>
 <div class="content" style="padding-bottom:110px">
 <div class="field"><div class="lbl">الزبون</div><select onchange="invDraft.customerId=this.value;const cc=cust(this.value);if(cc)invDraft.priceType=cc.type;render()">
 <option value="">— اختار الزبون —</option>
@@ -370,7 +374,7 @@ ${DB.customers.map(x=>`<option value="${x.id}" ${x.id===d.customerId?'selected':
 </div>
 ${c&&left>0?`<div class="alert" style="background:var(--blue-soft);border-color:#C9D8E8"><span style="color:var(--blue)">${ic('receipt',18)}</span><div class="tx" style="color:#2F567F">الباقي هيتحط على حساب ${esc(c.name)} أوتوماتيك — هيبقى عليه ${fmt(custBalance(c.id)+left)} ج بالإضافة للقديم.</div></div>`:''}
 </div>
-<div class="cta"><button class="btn btn-s" onclick="saveInvoice(true)">${ic('printer',18)} حفظ وطباعة</button><button class="btn btn-p" onclick="saveInvoice(false)">حفظ الفاتورة ✓</button></div>`;}
+<div class="cta"><button class="btn btn-s" style="flex:1;font-size:13px;gap:4px" onclick="saveInvDraft()">${ic('pencil',16)} مسودة</button><button class="btn btn-s" style="flex:1.3;font-size:13px;gap:4px" onclick="saveInvoice(true)">${ic('printer',16)} حفظ وطباعة</button><button class="btn btn-p" style="flex:1.5;font-size:13.5px" onclick="saveInvoice(false)">حفظ الفاتورة ✓</button></div>`;}
 function invItemRow(it,i){const p=prod(it.productId);return `<div class="item-row"><div class="mid"><div class="t">${esc(it.name)}</div><div class="s">${fmt(it.price)} ج لل${esc(it.unit)}${p?` · متاح ${fmt(p.stock)}`:''}</div></div>
 <div class="qty"><button onclick="chQty(${i},1)">＋</button><span class="n">${fmt(it.qty)}</span><button onclick="chQty(${i},-1)">−</button></div>
 <div class="amt" style="width:60px;text-align:left">${fmt(it.qty*it.price)}</div>
@@ -390,7 +394,7 @@ for(const it of d.items){const p=prod(it.productId);if(p&&it.qty>p.stock){toast(
 const total=d.items.reduce((s,it)=>s+it.qty*it.price,0);let paid=Math.min(num(d.paid),total);
 const inv={id:uid(),num:DB.nextNum++,date:new Date().toISOString(),customerId:d.customerId,priceType:d.priceType,items:d.items.map(it=>({...it})),total,paid};
 d.items.forEach(it=>{const p=prod(it.productId);if(p)p.stock=Math.round((p.stock-it.qty)*100)/100;});
-DB.invoices.push(inv);save();
+DB.invoices.push(inv);if(d._draftId){DB.drafts=DB.drafts.filter(x=>x.id!==d._draftId);}save();
 const preset=d._preset;invDraft=null;
 if(andPrint){printInvoice(inv);setTimeout(()=>window.print(),80);}
 go(preset?'#/customers/'+preset:'#/');toast('الفاتورة اتحفظت ✓');}
@@ -400,10 +404,23 @@ function printInvoice(inv){const c=cust(inv.customerId);$('#print-area').innerHT
 ${inv.items.map(it=>`<tr><td>${esc(it.name)}</td><td>${fmt(it.qty)} ${esc(it.unit)}</td><td>${fmt(it.price)}</td><td>${fmt(it.qty*it.price)}</td></tr>`).join('')}</table>
 <div class="p-tot">الإجمالي: ${fmt(inv.total)} جنيه<br>المدفوع: ${fmt(inv.paid)} جنيه<br><b>الباقي: ${fmt(inv.total-inv.paid)} جنيه</b></div>
 <div class="p-foot">شكراً لتعاملكم معانا — ${esc(DB.settings.shopName)}</div>`;}
+/* ============ invoice drafts ============ */
+function saveInvDraft(){const d=invDraft;if(!d.items.length){toast('ضيف صنف واحد على الأقل');return;}
+const data={customerId:d.customerId||'',priceType:d.priceType,items:d.items.map(it=>({...it})),paid:d.paid||''};
+if(d._draftId){const x=DB.drafts.find(dr=>dr.id===d._draftId);if(x){Object.assign(x,data);}else{DB.drafts.push({id:d._draftId,date:new Date().toISOString(),...data});}}
+else{DB.drafts.push({id:uid(),date:new Date().toISOString(),...data});}
+save();const preset=d._preset;invDraft=null;
+go(preset?'#/customers/'+preset:'#/');toast('المسودة اتحفظت ✓ — هتلاقيها في الرئيسية');}
+function draftRow(dr){const c=cust(dr.customerId);const n=dr.items.reduce((s,it)=>s+it.qty*it.price,0);
+return `<div class="row" style="cursor:pointer" onclick="openInvDraft('${dr.id}')"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('pencil')}</div><div class="mid"><div class="t">${c?esc(c.name):'من غير زبون'}</div><div class="s">${dr.items.length.toLocaleString(AR)} صنف · ${relDate(dr.date)}</div></div><div class="end"><div class="amt">${fmt(n)} <small>ج</small></div><span class="badge b-blue">مسودة</span></div><button style="color:var(--red);padding:6px" onclick="event.stopPropagation();confirmSheet('هتمسح المسودة دي. متأكد؟','امسح المسودة',()=>delDraft('${dr.id}'))">${ic('trash',18)}</button></div>`;}
+function openInvDraft(id){const x=DB.drafts.find(dr=>dr.id===id);if(!x)return;
+invDraft={customerId:x.customerId||'',priceType:x.priceType||'w',items:x.items.map(it=>({...it})),paid:x.paid||'',_preset:null,_draftId:id};
+if(location.hash==='#/invoice'){render();}else{go('#/invoice');}}
+function delDraft(id){DB.drafts=DB.drafts.filter(x=>x.id!==id);save();render();toast('المسودة اتمسحت');}
 /* ============ purchase (توريد) ============ */
 let purDraft=null;
 function vPurchase(presetSupp){if(!purDraft||purDraft._preset!==presetSupp){purDraft={supplierId:presetSupp||'',items:[],paid:'',_preset:presetSupp};}
-const d=purDraft;const total=d.items.reduce((s,it)=>s+it.qty*it.cost,0);const paid=num(d.paid);const left=Math.max(total-paid,0);
+const d=purDraft;const total=d.items.reduce((s,it)=>s+it.qty*num(it.cost),0);const paid=num(d.paid);const left=Math.max(total-paid,0);
 return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">توريد بضاعة</div></div></div>
 <div class="content" style="padding-bottom:110px">
 <div class="field"><div class="lbl">المورد</div><select onchange="purDraft.supplierId=this.value">
@@ -411,28 +428,34 @@ return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin
 ${DB.suppliers.map(x=>`<option value="${x.id}" ${x.id===d.supplierId?'selected':''}>${esc(x.name)}</option>`).join('')}</select>
 <button class="add-item" style="margin-top:8px;margin-bottom:0" onclick="openPartySheet('s',null,true)">＋ مورد جديد</button></div>
 <div class="sec-title" style="margin-top:4px">البضاعة اللي دخلت</div>
-${d.items.map((it,i)=>`<div class="item-row"><div class="mid"><div class="t">${esc(it.name)}</div><div class="s">${fmt(it.cost)} ج تكلفة لل${esc(it.unit)}</div></div>
+${d.items.map((it,i)=>{const pp=prod(it.productId);const changed=pp&&num(it.cost)!==pp.cost;return `<div class="item-row"><div class="mid"><div class="t">${esc(it.name)}</div><div class="s" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px">سعر الشراء <input class="cost-in" inputmode="decimal" value="${esc(String(it.cost))}" oninput="purDraft.items[${i}].cost=this.value;updPurTotals()"> ج/${esc(it.unit)}${changed?`<span class="badge b-amber" style="margin-top:0">المسجل ${fmt(pp.cost)}</span>`:''}</div></div>
 <div class="qty"><button onclick="chPQty(${i},1)">＋</button><span class="n">${fmt(it.qty)}</span><button onclick="chPQty(${i},-1)">−</button></div>
-<div class="amt" style="width:60px;text-align:left">${fmt(it.qty*it.cost)}</div>
-<button style="color:var(--red)" onclick="purDraft.items.splice(${i},1);render()">${ic('trash',18)}</button></div>`).join('')}
+<div class="amt" id="pur-amt-${i}" style="width:60px;text-align:left">${fmt(it.qty*num(it.cost))}</div>
+<button style="color:var(--red)" onclick="purDraft.items.splice(${i},1);render()">${ic('trash',18)}</button></div>`;}).join('')}
 <button class="add-item" onclick="openPickPurProduct()">＋ ضيف صنف دخل المحل</button>
+<button class="add-item" style="color:#9A6A14" onclick="openProductSheet(null,true)">＋ صنف جديد لسه متسجلش</button>
 <div class="total-card">
-<div class="trow"><span class="k">إجمالي التوريد</span><span style="font-weight:800">${fmt(total)} جنيه</span></div>
-<div class="trow"><span class="k">المدفوع للمورد دلوقتي</span><input inputmode="decimal" placeholder="٠" value="${esc(d.paid)}" oninput="purDraft.paid=this.value"></div>
-<div class="trow grand"><span>الباقي للمورد</span><span class="due">${fmt(left)} جنيه</span></div>
+<div class="trow"><span class="k">إجمالي التوريد</span><span style="font-weight:800" id="pur-total">${fmt(total)} جنيه</span></div>
+<div class="trow"><span class="k">المدفوع للمورد دلوقتي</span><input inputmode="decimal" placeholder="٠" value="${esc(d.paid)}" oninput="purDraft.paid=this.value;updPurTotals()"></div>
+<div class="trow grand"><span>الباقي للمورد</span><span class="due" id="pur-left">${fmt(left)} جنيه</span></div>
 </div>
-<div class="alert" style="background:var(--green-soft);border-color:#C6E2D2"><span style="color:var(--green)">${ic('box',18)}</span><div class="tx" style="color:var(--green)">الكميات هتتضاف للمخزون أوتوماتيك، وسعر التكلفة ده اللي هيتحسب عليه ربحك.</div></div>
+<div class="alert" style="background:var(--green-soft);border-color:#C6E2D2"><span style="color:var(--green)">${ic('box',18)}</span><div class="tx" style="color:var(--green)">الكميات هتتضاف للمخزون أوتوماتيك، وسعر الشراء اللي كتبته هيتحفظ كتكلفة جديدة للصنف، وربحك هيتحسب على أساسها.</div></div>
 </div>
 <div class="cta"><button class="btn btn-p" onclick="savePurchase()">حفظ التوريد ✓</button></div>`;}
 function chPQty(i,d){const it=purDraft.items[i];it.qty=Math.max(1,(+it.qty||1)+d);render();}
-function openPickPurProduct(){if(!DB.products.length){toast('ضيف أصناف الأول');return;}
-sheet('اختار الصنف اللي اتورّد',`<div class="search" style="margin-top:0">${ic('search',18)}<input placeholder="دوّر…" oninput="$('#ppp-list').innerHTML=pickPurListHTML(this.value)"></div><div id="ppp-list">${pickPurListHTML('')}</div>`);}
-function pickPurListHTML(q){return DB.products.filter(p=>!q||p.name.includes(q)).map(p=>`<button class="row" style="margin-bottom:6px" onclick="pickPurProduct('${p.id}')"><div class="mid"><div class="t">${esc(p.name)}</div><div class="s">تكلفة ${fmt(p.cost)} ج · متاح حالياً ${fmt(p.stock)}</div></div>${ic('plus',18)}</button>`).join('')||'<div class="empty">مفيش نتايج</div>';}
+function updPurTotals(){const d=purDraft;if(!d)return;const total=d.items.reduce((s,it)=>s+it.qty*num(it.cost),0);
+const te=$('#pur-total');if(te)te.textContent=fmt(total)+' جنيه';
+const le=$('#pur-left');if(le)le.textContent=fmt(Math.max(total-num(d.paid),0))+' جنيه';
+d.items.forEach((it,i)=>{const a=$('#pur-amt-'+i);if(a)a.textContent=fmt(it.qty*num(it.cost));});}
+function openPickPurProduct(){
+sheet('اختار الصنف اللي اتورّد',`<div class="search" style="margin-top:0">${ic('search',18)}<input placeholder="دوّر…" oninput="$('#ppp-list').innerHTML=pickPurListHTML(this.value)"></div><div id="ppp-list">${pickPurListHTML('')}</div><button class="add-item" style="margin-top:4px;color:#9A6A14" onclick="closeSheet();openProductSheet(null,true)">＋ صنف جديد لسه متسجلش</button>`);}
+function pickPurListHTML(q){return DB.products.filter(p=>!q||p.name.includes(q)).map(p=>`<button class="row" style="margin-bottom:6px" onclick="pickPurProduct('${p.id}')"><div class="mid"><div class="t">${esc(p.name)}</div><div class="s">آخر شراء ${fmt(p.cost)} ج · متاح حالياً ${fmt(p.stock)}</div></div>${ic('plus',18)}</button>`).join('')||'<div class="empty">مفيش نتايج</div>';}
 function pickPurProduct(pid){const p=prod(pid);if(!p)return;const ex=purDraft.items.find(it=>it.productId===pid);
 if(ex){ex.qty+=1;}else{purDraft.items.push({productId:pid,name:p.name,unit:p.unit,qty:1,cost:p.cost});}
 closeSheet();render();}
 function savePurchase(){const d=purDraft;if(!d.supplierId){toast('اختار المورد الأول');return;}
 if(!d.items.length){toast('ضيف صنف واحد على الأقل');return;}
+for(const it of d.items){it.cost=num(it.cost);if(it.cost<=0){toast('اكتب سعر الشراء لـ"'+it.name+'"');return;}}
 const total=d.items.reduce((s,it)=>s+it.qty*it.cost,0);let paid=Math.min(num(d.paid),total);
 d.items.forEach(it=>{const p=prod(it.productId);if(p){p.stock=Math.round((p.stock+it.qty)*100)/100;p.cost=it.cost;}});
 DB.purchases.push({id:uid(),date:new Date().toISOString(),supplierId:d.supplierId,items:d.items.map(it=>({...it})),total,paid});
@@ -453,7 +476,7 @@ if(amt<=0){toast('اكتب المبلغ');return;}
 DB.payments.push({id:uid(),date:new Date().toISOString(),kind,partyId:pid,partyType:kind==='in'?'c':'s',amount:amt,note});
 save();closeSheet();render();toast('الدفعة اتسجلت ✓');}
 /* ============ product / party sheets ============ */
-function openProductSheet(pid){const p=pid?prod(pid):null;
+function openProductSheet(pid,fromPur){const p=pid?prod(pid):null;
 sheet(p?'تعديل صنف':'صنف جديد',`
 <div class="field"><div class="lbl">اسم الصنف</div><input id="fp-name" value="${p?esc(p.name):''}" placeholder="زيت عباد ١٠ لتر"></div>
 <div class="field"><div class="lbl">الفئة</div><select id="fp-cat">${CATS.map(c=>`<option ${p&&p.cat===c?'selected':''}>${c}</option>`).join('')}</select></div>
@@ -461,15 +484,19 @@ sheet(p?'تعديل صنف':'صنف جديد',`
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
 <div class="field"><div class="lbl">سعر الجملة</div><input id="fp-w" inputmode="decimal" value="${p?p.wPrice:''}"></div>
 <div class="field"><div class="lbl">سعر القطاعي</div><input id="fp-r" inputmode="decimal" value="${p?p.rPrice:''}"></div>
-<div class="field"><div class="lbl">سعر التكلفة</div><input id="fp-cost" inputmode="decimal" value="${p?p.cost:''}"></div>
-<div class="field"><div class="lbl">الكمية الحالية</div><input id="fp-stock" inputmode="decimal" value="${p?p.stock:''}"></div></div>
+<div class="field"><div class="lbl">سعر التكلفة (سعر الشراء)</div><input id="fp-cost" inputmode="decimal" value="${p?p.cost:''}"></div>
+${fromPur?'':`<div class="field"><div class="lbl">الكمية الحالية</div><input id="fp-stock" inputmode="decimal" value="${p?p.stock:''}"></div>`}</div>
 <div class="field"><div class="lbl">نبّهني لما الكمية تقل عن</div><input id="fp-low" inputmode="decimal" value="${p?p.lowAt:'5'}"></div>
-<button class="btn btn-p" style="width:100%" onclick="saveProduct('${pid||''}')">${p?'حفظ التعديلات ✓':'ضيف الصنف ✓'}</button>
+${fromPur?`<div class="alert" style="margin:0 0 13px"><span style="color:#9A6A14">${ic('box',18)}</span><div class="tx">الكمية اللي داخلة هتكتبها في التوريد نفسه بعد ما تضيف الصنف.</div></div>`:''}
+<button class="btn btn-p" style="width:100%" onclick="saveProduct('${pid||''}',${fromPur?'true':'false'})">${p?'حفظ التعديلات ✓':fromPur?'ضيف الصنف للتوريد ✓':'ضيف الصنف ✓'}</button>
 ${p?`<button class="btn-danger" onclick="closeSheet();confirmSheet('هتمسح الصنف ده من المخزون (الفواتير القديمة هتفضل زي ما هي). متأكد؟','امسح الصنف',()=>{DB.products=DB.products.filter(x=>x.id!=='${pid}');save();render();toast('اتمسح');})">مسح الصنف</button>`:''}`);}
-function saveProduct(pid){const name=$('#fp-name').value.trim();if(!name){toast('اكتب اسم الصنف');return;}
-const data={name,cat:$('#fp-cat').value,unit:$('#fp-unit').value.trim()||'قطعة',wPrice:num($('#fp-w').value),rPrice:num($('#fp-r').value),cost:num($('#fp-cost').value),stock:num($('#fp-stock').value),lowAt:num($('#fp-low').value)};
-if(pid){Object.assign(prod(pid),data);}else{DB.products.push({id:uid(),...data});}
-save();closeSheet();render();toast(pid?'اتحفظ ✓':'الصنف اتضاف ✓');}
+function saveProduct(pid,fromPur){const name=$('#fp-name').value.trim();if(!name){toast('اكتب اسم الصنف');return;}
+const st=$('#fp-stock');
+const data={name,cat:$('#fp-cat').value,unit:$('#fp-unit').value.trim()||'قطعة',wPrice:num($('#fp-w').value),rPrice:num($('#fp-r').value),cost:num($('#fp-cost').value),stock:st?num(st.value):0,lowAt:num($('#fp-low').value)};
+if(pid){Object.assign(prod(pid),data);save();closeSheet();render();toast('اتحفظ ✓');return;}
+const np={id:uid(),...data};DB.products.push(np);save();closeSheet();
+if(fromPur&&purDraft){purDraft.items.push({productId:np.id,name:np.name,unit:np.unit,qty:1,cost:np.cost});}
+render();toast(fromPur?'الصنف اتضاف للتوريد ✓':'الصنف اتضاف ✓');}
 function openPartySheet(type,pid,fromInvoice){const isC=type==='c';const x=pid?(isC?cust(pid):supp(pid)):null;
 sheet(x?('تعديل '+(isC?'زبون':'مورد')):(isC?'زبون جديد':'مورد جديد'),`
 <div class="field"><div class="lbl">الاسم</div><input id="ft-name" value="${x?esc(x.name):''}" placeholder="${isC?'مطعم الفلاح — الحاج رضوان':'شركة النور للتوريدات'}"></div>
@@ -499,12 +526,12 @@ function vSettings(){return `<div class="appbar"><div>${backBtn('#/')}<div class
 <input type="file" id="imp-file" accept=".json,application/json" style="display:none" onchange="importData(this)">
 <div class="sec-title">منطقة الخطر</div>
 <button class="set-row" style="color:var(--red)" onclick="confirmSheet('هيمسح كل البيانات ويرجع الأصناف الافتراضية من الأول. متأكد؟','امسح كل حاجة',()=>{DB=seed();save();go('#/');render();toast('رجعنا للبيانات الافتراضية');})">${ic('trash')}<span>امسح كل البيانات وابدأ من جديد</span></button>
-<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · النسخة الأولى · بياناتك متخزنة على جهازك بس</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · النسخة التانية · بياناتك متخزنة على جهازك بس</div>
 </div>`+navbar('home');}
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
 const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='نسخة-احتياطية-'+todayStr()+'.json';a.click();toast('النسخة نزلت ✓');}
 function importData(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
-r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.products||!d.settings)throw 0;DB=d;save();render();toast('النسخة رجعت ✓');}catch(e){toast('الملف ده مش نسخة صحيحة');}};
+r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.products||!d.settings)throw 0;if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;DB=d;save();render();toast('النسخة رجعت ✓');}catch(e){toast('الملف ده مش نسخة صحيحة');}};
 r.readAsText(f);}
 /* ============ router ============ */
 function go(h){location.hash=h;}
