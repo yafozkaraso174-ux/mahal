@@ -140,3 +140,105 @@ alter table backups enable row level security;
 -- النسخ الاحتياطي فيه كل بيانات المحل — ليك إنت بس (الحساب المسجل في Authentication)
 drop policy if exists "owner all backups" on backups;
 create policy "owner all backups" on backups for all to authenticated using (true) with check (true);
+
+-- ============================================================
+-- تحديث ٢١ نوفمبر ٢٠٢٦ (الرابع): تأمين الحسابات والنسخ الاحتياطي
+-- ١) هاش الأرقام السرية مش متاح للعامة خالص
+-- ٢) شاشة الدخول بتقرا قايمة عامة من غير الهاش
+-- ٣) التحقق من الرقم السري بيحصل على السيرفر + حد أقصى للمحاولات
+-- ٤) صلاحيات الكتابة مقصورة على أول حساب في المشروع (حسابك إنت)
+-- شغّل الملف ده كله مرة واحدة — آمن يتشغل أكتر من مرة
+-- ============================================================
+
+create extension if not exists pgcrypto;
+
+-- قايمة عامة لشاشة الدخول: كل حاجة ما عدا هاش الرقم السري
+create or replace view shop_users_public as
+select id, name, owner, active, perms, updated_at from shop_users;
+grant select on shop_users_public to anon;
+grant select on shop_users_public to authenticated;
+
+-- الجدول الأساسي مبقاش مقروء للعامة
+drop policy if exists "public read shop_users" on shop_users;
+
+-- جدول محاولات الدخول (مش متاح لأي حد — بيشتغل جوه الدالة بس)
+create table if not exists pin_attempts (
+  user_id text primary key,
+  fails int not null default 0,
+  window_start timestamptz not null default now()
+);
+alter table pin_attempts enable row level security;
+revoke all on pin_attempts from anon;
+revoke all on pin_attempts from authenticated;
+
+-- التحقق من الرقم السري على السيرفر: ٥ محاولات غلط كل ١٠ دقايق لكل حساب
+create or replace function verify_pin(p_id text, p_pin text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  stored text;
+  fails_now int;
+  win timestamptz;
+begin
+  perform pg_sleep(0.3);
+  select pin_h into stored from shop_users where id = p_id and active;
+  if stored is null then return false; end if;
+
+  insert into pin_attempts (user_id, fails, window_start) values (p_id, 0, now())
+  on conflict (user_id) do nothing;
+  select fails, window_start into fails_now, win from pin_attempts where user_id = p_id;
+
+  if now() - win > interval '10 minutes' then
+    update pin_attempts set fails = 0, window_start = now() where user_id = p_id;
+    fails_now := 0;
+  end if;
+  if fails_now >= 5 then return false; end if;
+
+  if stored = encode(digest('mahal-pin-v1:' || p_pin, 'sha256'), 'hex') then
+    update pin_attempts set fails = 0, window_start = now() where user_id = p_id;
+    return true;
+  else
+    update pin_attempts set fails = fails + 1 where user_id = p_id;
+    return false;
+  end if;
+end;
+$$;
+revoke all on function verify_pin(text, text) from public;
+grant execute on function verify_pin(text, text) to anon;
+grant execute on function verify_pin(text, text) to authenticated;
+
+-- صلاحيات الكتابة مقصورة على أول حساب اتعمل في المشروع (حسابك إنت)
+drop policy if exists "owner all shop_users" on shop_users;
+create policy "owner all shop_users" on shop_users for all to authenticated
+  using (auth.uid() = (select id from auth.users order by created_at asc limit 1))
+  with check (auth.uid() = (select id from auth.users order by created_at asc limit 1));
+
+drop policy if exists "owner all backups" on backups;
+create policy "owner all backups" on backups for all to authenticated
+  using (auth.uid() = (select id from auth.users order by created_at asc limit 1))
+  with check (auth.uid() = (select id from auth.users order by created_at asc limit 1));
+
+drop policy if exists "owner all orders" on orders;
+create policy "owner all orders" on orders for all to authenticated
+  using (auth.uid() = (select id from auth.users order by created_at asc limit 1))
+  with check (auth.uid() = (select id from auth.users order by created_at asc limit 1));
+
+drop policy if exists "owner all products" on products;
+create policy "owner all products" on products for all to authenticated
+  using (auth.uid() = (select id from auth.users order by created_at asc limit 1))
+  with check (auth.uid() = (select id from auth.users order by created_at asc limit 1));
+
+drop policy if exists "owner all shop_info" on shop_info;
+create policy "owner all shop_info" on shop_info for all to authenticated
+  using (auth.uid() = (select id from auth.users order by created_at asc limit 1))
+  with check (auth.uid() = (select id from auth.users order by created_at asc limit 1));
+
+drop policy if exists "owner write product photos" on storage.objects;
+create policy "owner write product photos" on storage.objects for all to authenticated
+  using (bucket_id = 'product-photos' and auth.uid() = (select id from auth.users order by created_at asc limit 1))
+  with check (bucket_id = 'product-photos' and auth.uid() = (select id from auth.users order by created_at asc limit 1));
+
+-- قراءة الأصناف وبيانات المحل وإرسال الطلبات للزباين زي ما هي (مش متأثرة)

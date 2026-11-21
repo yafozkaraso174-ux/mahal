@@ -325,8 +325,13 @@ document.querySelectorAll('.user-pick').forEach(b=>b.classList.remove('on'));
 const b=document.getElementById('up-'+id);if(b)b.classList.add('on');
 $('#login-pin').innerHTML=`<input id="pin-in" type="password" inputmode="numeric" autocomplete="off" placeholder="الرقم السري" onkeydown="if(event.key==='Enter')tryLogin('${id}')"><button class="btn btn-p" style="width:100%;margin-top:12px" onclick="tryLogin('${id}')">دخول</button>`;
 setTimeout(()=>$('#pin-in')?.focus(),50);}
+function loginOk(u){curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify({id:u.id}));render();}
+function loginBad(inp){toast('الرقم السري غلط، حاول تاني');inp.value='';inp.focus();}
 async function tryLogin(id){const u=DB.users.find(x=>x.id===id&&x.active);const inp=$('#pin-in');const v=(inp?.value||'').trim();if(!u||!v)return;
-if(await pinHash(v)===u.pinH){curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify({id:u.id}));render();}else{toast('الرقم السري غلط، حاول تاني');inp.value='';inp.focus();}}
+if(u.pinH){if(await pinHash(v)===u.pinH)loginOk(u);else loginBad(inp);return;}
+try{const ok=await SB.req('rpc/verify_pin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({p_id:u.id,p_pin:v})});
+ if(ok===true){u.pinH=await pinHash(v);save();loginOk(u);}else loginBad(inp);
+}catch(e){toast('الحساب ده محتاج نت أول مرة يسجل دخول على الجهاز ده');}}
 function logout(){curUser=null;sessionStorage.removeItem('mahal_cur');closeSheet();go('#/');render();}
 function vNoPerm(){return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">مش مسموح</div></div></div><div class="content"><div class="empty"><div class="big">الصفحة دي مش متاحة لحسابك</div>كلم صاحب المحل لو محتاج الصلاحية دي</div></div>`+navbar('');}
 /* ---- إدارة المستخدمين (المالك) ---- */
@@ -462,7 +467,7 @@ async function pushUsers(){if(!SB.ready()||!SB.cfg.email||!SB.cfg.pass)return;
  if(ids.length)await SB.req('shop_users?id=not.in.('+ids.map(encodeURIComponent).join(',')+')',{method:'DELETE'});
  localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(ids.map(String)));}catch(e){}}
 async function pullUsers(){SB.load();if(!(SB.cfg.url||SB_DEF.url))return false;usersPulledAt=Date.now();
- let rows;try{rows=await SB.req('shop_users?select=*');}catch(e){return false;}
+ let rows;try{rows=await SB.req('shop_users_public?select=*');}catch(e){try{rows=await SB.req('shop_users?select=*');}catch(e2){return false;}}
  if(!Array.isArray(rows))return false;
  let changed=false,needPush=false;let synced=[];
  try{synced=JSON.parse(localStorage.getItem(USERS_SYNC_KEY)||'[]');}catch(e){}
