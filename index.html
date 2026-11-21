@@ -304,6 +304,7 @@ try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');if(cu){cons
 async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 const pinHash=pin=>sha256hex('mahal-pin-v1:'+pin);
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
+const APP_VER='2026-11-21r4';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vSetup(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('users',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>أول مرة تشغّل البرنامج — اعمل حساب المالك عشان البرنامج يتقفل على اللي انت تختارهم بس</p>
@@ -316,7 +317,7 @@ if(!name){toast('اكتب اسمك');return;}
 if(p1.trim().length<4){toast('الرقم السري لازم يكون ٤ حروف أو أرقام على الأقل');return;}
 if(p1!==p2){toast('التأكيد مش مطابق للرقم السري');return;}
 const u={id:uid(),name,pinH:await pinHash(p1.trim()),owner:true,active:true,perms:{invoice:1,products:1,customers:1,suppliers:1,orders:1,settings:1,del:1},upd:new Date().toISOString()};
-DB.users.push(u);save();pushUsers();curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify({id:u.id}));render();toast('أهلاً بيك يا '+esc(name)+' ✓');}
+DB.users.push(u);save();pushUsers(true);curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify({id:u.id}));render();toast('أهلاً بيك يا '+esc(name)+' ✓');}
 function vLogin(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>اختار حسابك واكتب الرقم السري</p>
 ${DB.users.filter(u=>u.active).map(u=>`<button class="user-pick" id="up-${u.id}" onclick="pickLoginUser('${u.id}')">${ic('users',18)} ${esc(u.name)}${u.owner?' 👑':''}</button>`).join('')}
 <div id="login-pin"></div></div></div>`;}
@@ -348,18 +349,18 @@ sheet(u?'تعديل مستخدم':'مستخدم جديد',`
 <div class="lbl" style="margin:4px 2px 8px">الصلاحيات</div>
 ${PERMS.map(([k,l])=>`<label class="set-row" style="cursor:pointer"><input type="checkbox" id="uf-p-${k}" ${u&&u.perms&&u.perms[k]?'checked':''} style="width:18px;height:18px;accent-color:var(--green)"> <span>${l}</span></label>`).join('')}
 <button class="btn btn-p" style="width:100%;margin-top:10px" onclick="saveUser('${id||''}')">${u?'حفظ ✓':'ضيف المستخدم ✓'}</button>
-${u&&!u.owner?`<button class="btn-danger" onclick="closeSheet();if(confirm('هتمسح المستخدم ده نهائي. متأكد؟')){DB.users=DB.users.filter(x=>x.id!=='${id}');save();pushUsers();render();toast('اتمسح');}">مسح المستخدم</button>`:''}`);}
+${u&&!u.owner?`<button class="btn-danger" onclick="closeSheet();if(confirm('هتمسح المستخدم ده نهائي. متأكد؟')){DB.users=DB.users.filter(x=>x.id!=='${id}');save();pushUsers(true);render();toast('اتمسح');}">مسح المستخدم</button>`:''}`);}
 async function saveUser(id){const name=($('#uf-name')?.value||'').trim();const pin=($('#uf-pin')?.value||'').trim();
 if(!name){toast('اكتب الاسم');return;}
 const perms={};PERMS.forEach(([k])=>{const el=document.getElementById('uf-p-'+k);perms[k]=el&&el.checked?1:0;});
 if(id){const u=DB.users.find(x=>x.id===id);if(!u)return;u.name=name;u.perms=perms;
  if(pin){if(pin.length<4){toast('الرقم السري لازم ٤ على الأقل');return;}u.pinH=await pinHash(pin);}
  u.upd=new Date().toISOString();
- save();pushUsers();closeSheet();render();toast('اتحفظ ✓');return;}
+ save();pushUsers(true);closeSheet();render();toast('اتحفظ ✓');return;}
 if(pin.length<4){toast('اكتب رقم سري ٤ أرقام أو أكتر');return;}
 DB.users.push({id:uid(),name,pinH:await pinHash(pin),owner:false,active:true,perms,upd:new Date().toISOString()});
-save();pushUsers();closeSheet();render();toast('المستخدم اتضاف ✓');}
-function toggleUser(id){const u=DB.users.find(x=>x.id===id);if(!u||u.owner)return;u.active=!u.active;u.upd=new Date().toISOString();save();pushUsers();
+save();pushUsers(true);closeSheet();render();toast('المستخدم اتضاف ✓');}
+function toggleUser(id){const u=DB.users.find(x=>x.id===id);if(!u||u.owner)return;u.active=!u.active;u.upd=new Date().toISOString();save();pushUsers(true);
 if(!u.active&&curUser&&curUser.id===id){logout();toast('الحساب اتوقف');return;}
 render();toast(u.active?'الحساب اتفعّل ✓':'الحساب اتوقف');}
 function openMyPinSheet(){sheet('تغيير الرقم السري',`
@@ -372,7 +373,7 @@ if(await pinHash(o)!==curUser.pinH){toast('الرقم الحالي غلط');retu
 if(n1.length<4){toast('الرقم الجديد لازم ٤ على الأقل');return;}
 if(n1!==n2){toast('التأكيد مش مطابق');return;}
 curUser.pinH=await pinHash(n1);const u=DB.users.find(x=>x.id===curUser.id);if(u){u.pinH=curUser.pinH;u.upd=new Date().toISOString();}
-save();pushUsers();closeSheet();toast('الرقم السري اتغيّر ✓');}
+save();pushUsers(true);closeSheet();toast('الرقم السري اتغيّر ✓');}
 /* ============ صور الأصناف (تخزين محلي IndexedDB) ============ */
 const PHOTOS={
  db:null,
@@ -459,19 +460,25 @@ async updateOrder(id,items,total){await this.login();await this.req('orders?id=e
 let shopOrders=null,shopOrdersErr=false,shopOrdersAt=0;
 /* ---- مزامنة الحسابات بين الأجهزة (جدول shop_users) ---- */
 let usersPulledAt=0;const USERS_SYNC_KEY='mahal_users_synced';
-async function pushUsers(){if(!SB.ready()||!SB.cfg.email||!SB.cfg.pass)return;
+async function pushUsers(loud){if(!SB.ready()||!SB.cfg.email||!SB.cfg.pass){if(loud)toast('بيانات المتجر (الإيميل والباسورد) مش محفوظة على الجهاز ده — الحسابات مش هتتزامن منه');return;}
  try{await SB.login();const now=new Date().toISOString();
  const rows=DB.users.map(u=>{if(!u.upd)u.upd=now;return{id:u.id,name:u.name,pin_h:u.pinH,owner:!!u.owner,active:!!u.active,perms:u.perms||{},updated_at:u.upd};});
  await SB.req('shop_users',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
  const ids=DB.users.map(u=>u.id);
  if(ids.length)await SB.req('shop_users?id=not.in.('+ids.map(encodeURIComponent).join(',')+')',{method:'DELETE'});
- localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(ids.map(String)));}catch(e){}}
+ localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(ids.map(String)));}catch(e){if(loud)toast((e&&e.message||'').includes('40')?'السيرفر رفض الكتابة — تأكد إن حساب المتجر هو صاحب المشروع':'مشكلة اتصال — الحسابات هتتحاول تترفع تاني');}}
 async function pullUsers(){SB.load();if(!(SB.cfg.url||SB_DEF.url))return false;usersPulledAt=Date.now();
  let rows;try{rows=await SB.req('shop_users_public?select=*');}catch(e){try{rows=await SB.req('shop_users?select=*');}catch(e2){return false;}}
  if(!Array.isArray(rows))return false;
  let changed=false,needPush=false;let synced=[];
  try{synced=JSON.parse(localStorage.getItem(USERS_SYNC_KEY)||'[]');}catch(e){}
  const remoteIds=rows.map(r=>String(r.id));
+ const remOwner=rows.find(r=>r.owner&&r.active!==false);
+ const locOwner=DB.users.find(u=>u.owner);
+ if(remOwner&&locOwner&&String(remOwner.id)!==String(locOwner.id)){
+  DB.users=DB.users.filter(u=>u.id!==locOwner.id);
+  if(curUser&&curUser.id===locOwner.id){curUser=null;sessionStorage.removeItem('mahal_cur');}
+ }
  const before=DB.users.length;
  DB.users=DB.users.filter(u=>!(synced.includes(String(u.id))&&!remoteIds.includes(String(u.id))));
  if(DB.users.length!==before)changed=true;
@@ -993,7 +1000,7 @@ ${paySettingsHTML()}
 ${curUser.owner?`<button class="set-row" onclick="go('#/users')">${ic('users')}<span>إدارة المستخدمين<span class="s" style="display:block">ضيف حسابات للعاملين معاك، فعّل/وقّف، وحدد صلاحيات كل واحد</span></span></button>`:''}
 <button class="set-row" onclick="openMyPinSheet()">${ic('lock')}<span>غيّر الرقم السري بتاعك</span></button>
 <button class="set-row" style="color:var(--red)" onclick="logout()">${ic('x')}<span>تسجيل خروج</span></button>
-<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · النسخة التانية · بياناتك متخزنة على جهازك بس</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · إصدار ${APP_VER} · بياناتك الأساسية على جهازك والنسخة الاحتياطية على السحابة</div>
 </div>`+navbar('home');}
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
 const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='نسخة-احتياطية-'+todayStr()+'.json';a.click();toast('النسخة نزلت ✓');}
