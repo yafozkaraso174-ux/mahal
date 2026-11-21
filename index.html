@@ -304,7 +304,7 @@ try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');if(cu){cons
 async function sha256hex(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 const pinHash=pin=>sha256hex('mahal-pin-v1:'+pin);
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r4';
+const APP_VER='2026-11-21r5';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vSetup(){return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('users',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>أول مرة تشغّل البرنامج — اعمل حساب المالك عشان البرنامج يتقفل على اللي انت تختارهم بس</p>
@@ -459,14 +459,14 @@ async updateOrder(id,items,total){await this.login();await this.req('orders?id=e
 };
 let shopOrders=null,shopOrdersErr=false,shopOrdersAt=0;
 /* ---- مزامنة الحسابات بين الأجهزة (جدول shop_users) ---- */
-let usersPulledAt=0;const USERS_SYNC_KEY='mahal_users_synced';
-async function pushUsers(loud){if(!SB.ready()||!SB.cfg.email||!SB.cfg.pass){if(loud)toast('بيانات المتجر (الإيميل والباسورد) مش محفوظة على الجهاز ده — الحسابات مش هتتزامن منه');return;}
+let usersPulledAt=0,pushToastShown=false;const USERS_SYNC_KEY='mahal_users_synced';
+async function pushUsers(loud){if(!SB.ready()||!SB.cfg.email||!SB.cfg.pass){if(loud&&!pushToastShown){pushToastShown=true;toast('بيانات المتجر (الإيميل والباسورد) مش محفوظة على الجهاز ده — الحسابات مش هتتزامن منه');}return;}
  try{await SB.login();const now=new Date().toISOString();
  const rows=DB.users.map(u=>{if(!u.upd)u.upd=now;return{id:u.id,name:u.name,pin_h:u.pinH,owner:!!u.owner,active:!!u.active,perms:u.perms||{},updated_at:u.upd};});
  await SB.req('shop_users',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
  const ids=DB.users.map(u=>u.id);
  if(ids.length)await SB.req('shop_users?id=not.in.('+ids.map(encodeURIComponent).join(',')+')',{method:'DELETE'});
- localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(ids.map(String)));}catch(e){if(loud)toast((e&&e.message||'').includes('40')?'السيرفر رفض الكتابة — تأكد إن حساب المتجر هو صاحب المشروع':'مشكلة اتصال — الحسابات هتتحاول تترفع تاني');}}
+ localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(ids.map(String)));pushToastShown=false;}catch(e){if(loud&&!pushToastShown){pushToastShown=true;toast((e&&e.message||'').includes('40')?'السيرفر رفض الكتابة — تأكد إن حساب المتجر هو صاحب المشروع':'مشكلة اتصال — الحسابات هتتحاول تترفع تاني');}}}
 async function pullUsers(){SB.load();if(!(SB.cfg.url||SB_DEF.url))return false;usersPulledAt=Date.now();
  let rows;try{rows=await SB.req('shop_users_public?select=*');}catch(e){try{rows=await SB.req('shop_users?select=*');}catch(e2){return false;}}
  if(!Array.isArray(rows))return false;
@@ -491,7 +491,7 @@ async function pullUsers(){SB.load();if(!(SB.cfg.url||SB_DEF.url))return false;u
  if(changed){save();
   if(curUser){const still=DB.users.find(x=>x.id===curUser.id&&x.active);if(still)curUser=still;else{curUser=null;sessionStorage.removeItem('mahal_cur');}}}
  localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(remoteIds));
- if(needPush)pushUsers();
+ if(needPush)pushUsers(true);
  return changed;}
 /* ---- نسخ احتياطي تلقائي على السحابة (جدول backups) ---- */
 let backupTimer=null;
