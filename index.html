@@ -294,7 +294,7 @@ if(!DB.movements)DB.movements=[];
 if(!Array.isArray(DB.users))DB.users=[];
 if(!DB.users.length&&localStorage.getItem('mahal_pin')){DB.users.push({id:uid(),name:'صاحب المحل',pinH:localStorage.getItem('mahal_pin'),owner:true,active:true,perms:{invoice:1,products:1,customers:1,suppliers:1,orders:1,settings:1,del:1},upd:new Date().toISOString()});localStorage.removeItem('mahal_pin');sessionStorage.removeItem('mahal_pin_ok');}
 DB.users.forEach(u=>{if(!u.owner&&u.perms&&u.perms.stats==null)u.perms.stats=1;});
-function save(){localStorage.setItem(KEY,JSON.stringify(DB));}
+function save(){localStorage.setItem(KEY,JSON.stringify(DB));try{scheduleCloudBackup();}catch(e){}}
 function logMove(pid,kind,qty,before,after,ref){DB.movements.push({id:uid(),pid,kind,qty,before,after,ref:ref||'',date:new Date().toISOString()});}
 save();
 /* ============ المستخدمين والقفل (حسابات) ============ */
@@ -480,6 +480,25 @@ async function pullUsers(){if(!SB.ready())return false;usersPulledAt=Date.now();
  localStorage.setItem(USERS_SYNC_KEY,JSON.stringify(remoteIds));
  if(needPush)pushUsers();
  return changed;}
+/* ---- نسخ احتياطي تلقائي على السحابة (جدول backups) ---- */
+let backupTimer=null;
+function scheduleCloudBackup(){clearTimeout(backupTimer);backupTimer=setTimeout(pushCloudBackup,90000);}
+async function pushCloudBackup(){if(!SB.ready())return;
+ try{await SB.login();
+ await SB.req('backups',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify([{id:1,data:DB,updated_at:new Date().toISOString()}])});
+ localStorage.setItem('mahal_last_backup',new Date().toISOString());
+ const el=document.getElementById('bk-status');if(el)el.textContent=backupStatusText();
+ }catch(e){}}
+function backupStatusText(){const t=localStorage.getItem('mahal_last_backup');return t?('آخر نسخة تلقائية: '+relDate(t)):'النسخ التلقائي شغال — أول نسخة هتترفع بعد أول تعديل';}
+async function restoreCloudBackup(){if(!SB.ready()){toast('المتجر مش متوصل — حط بياناته من الإعدادات الأول');return;}
+ toast('بندوّر على آخر نسخة…');
+ try{await SB.login();const rows=await SB.req('backups?id=eq.1&select=data,updated_at');
+ const b=rows&&rows[0];if(!b||!b.data||!b.data.products){toast('لسه مفيش نسخة سحابية');return;}
+ confirmSheet('هترجع نسخة '+relDate(b.updated_at)+' — بيانات الجهاز ده هتتبدل بيها. متأكد؟','رجّع النسخة',()=>{
+  const d=b.data;if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;if(!Array.isArray(d.users))d.users=[];if(!Array.isArray(d.movements))d.movements=[];
+  DB=d;save();curUser=null;sessionStorage.removeItem('mahal_cur');render();toast('النسخة رجعت ✓ — سجّل دخول من جديد');});
+ }catch(e){toast(e.message==='auth-failed'?'الإيميل أو الباسورد غلط':'في مشكلة في الاتصال — جرب تاني');}}
+window.addEventListener('pagehide',()=>{if(backupTimer){clearTimeout(backupTimer);backupTimer=null;pushCloudBackup();}});
 async function syncShopNow(){if(!SB.ready()){toast('حط بيانات المتجر الأول من الإعدادات');return;}
 toast('بنزّل الأصناف على المتجر…');
 try{const n=await SB.pushProducts();toast('اتنزّل '+n.toLocaleString(AR)+' صنف على المتجر ✓');}catch(e){toast(e.message==='auth-failed'?'الإيميل أو الباسورد غلط':'في مشكلة في الاتصال — جرب تاني');}}
@@ -949,8 +968,11 @@ ${zonesHTML()}
 <div class="sec-title" style="font-size:13px;margin-top:2px">طرق الدفع في المتجر</div>
 ${paySettingsHTML()}
 <div class="sec-title">النسخ الاحتياطي</div>
-<button class="set-row" onclick="exportData()">${ic('download')}<span>نزّل نسخة احتياطية<span class="s" style="display:block">ملف فيه كل بياناتك — نزّله كل فترة وابعته لنفسك واتساب</span></span></button>
-<button class="set-row" onclick="document.getElementById('imp-file').click()">${ic('upload')}<span>رجّع نسخة احتياطية<span class="s" style="display:block">لو غيرت الموبايل أو مسحت المتصفح</span></span></button>
+<div class="set-row" style="cursor:default">${ic('lock')}<span>نسخ تلقائي على السحابة<span class="s" style="display:block" id="bk-status">${backupStatusText()}</span></span></div>
+<button class="set-row" onclick="pushCloudBackup().then(()=>{toast(localStorage.getItem('mahal_last_backup')?'النسخة اترفعت ✓':'مفيش اتصال — هتترفع لوحدها أول ما النت يشتغل');})">${ic('upload')}<span>ارفع نسخة دلوقتي<span class="s" style="display:block">بتتخزن في مشروع Supabase بتاعك (جدول backups) — فين؟ افتح supabase.com ← مشروعك ← Table Editor ← backups</span></span></button>
+<button class="set-row" onclick="restoreCloudBackup()">${ic('down')}<span>رجّع آخر نسخة من السحابة<span class="s" style="display:block">لو الجهاز اتضاع أو البيانات اتمسحت</span></span></button>
+<button class="set-row" onclick="exportData()">${ic('download')}<span>نزّل نسخة ملف على جهازك<span class="s" style="display:block">الملف بينزل في فولدر التنزيلات Downloads — ابعته لنفسك واتساب</span></span></button>
+<button class="set-row" onclick="document.getElementById('imp-file').click()">${ic('upload')}<span>رجّع نسخة من ملف<span class="s" style="display:block">لو غيرت الموبايل أو مسحت المتصفح</span></span></button>
 <input type="file" id="imp-file" accept=".json,application/json" style="display:none" onchange="importData(this)">
 <div class="sec-title">التقارير (Excel)</div>
 <button class="set-row" onclick="exportProducts()">${ic('download')}<span>المخزون والأصناف<span class="s" style="display:block">كل الأصناف بالأسعار والكميات — يفتح في Excel</span></span></button>

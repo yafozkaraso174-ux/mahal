@@ -124,3 +124,19 @@ create policy "public read shop_users" on shop_users for select to public using 
 -- الإضافة والتعديل والمسح للحساب المسجل في Authentication بس (حسابك إنت)
 drop policy if exists "owner all shop_users" on shop_users;
 create policy "owner all shop_users" on shop_users for all to authenticated using (true) with check (true);
+
+-- ============================================================
+-- تحديث ٢١ نوفمبر ٢٠٢٦ (التالت): نسخ احتياطي تلقائي
+-- البرنامج بيرفع نسخة من كل البيانات هنا لوحده بعد أي تعديل
+-- ============================================================
+create table if not exists backups (
+  id int primary key,
+  data jsonb not null,
+  updated_at timestamptz default now()
+);
+
+alter table backups enable row level security;
+
+-- النسخ الاحتياطي فيه كل بيانات المحل — ليك إنت بس (الحساب المسجل في Authentication)
+drop policy if exists "owner all backups" on backups;
+create policy "owner all backups" on backups for all to authenticated using (true) with check (true);
