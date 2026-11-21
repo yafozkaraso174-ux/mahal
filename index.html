@@ -306,7 +306,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r15';
+const APP_VER='2026-11-21r16';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -558,7 +558,11 @@ async function syncTick(){lastSyncTick=Date.now();
   const rem=rows&&rows[0];const s=syncGet();const dirtyAt=localStorage.getItem(DIRTY_KEY);
   const remTs=Date.parse(rem&&rem.updated_at)||0;
   if(!s.decided){
-   if(remTs>0){syncBusy=false;showSyncChoice(rem.updated_at);return;}
+   if(remTs>0){
+    if(!dirtyAt){const full0=await SB.req('backups?id=eq.1&select=data,updated_at');const b0=full0&&full0[0];
+     if(b0&&b0.data&&b0.data.products){applyRemoteDB(b0.data);const s9=syncGet();s9.decided=true;s9.lastPull=b0.updated_at;s9.lastPush=b0.updated_at;syncSet(s9);render();toast('اتحمّلت بيانات المحل على الجهاز ده ✓');}
+     syncBusy=false;return;}
+    syncBusy=false;showSyncChoice(rem.updated_at);return;}
    s.decided=true;syncSet(s);syncBusy=false;return;}
   if(dirtyAt){
    const lastSync=Math.max(Date.parse(s.lastPull||0)||0,Date.parse(s.lastPush||0)||0);
@@ -761,7 +765,7 @@ if(q)list=list.filter(i=>{const c=cust(i.customerId);return String(i.num).includ
 return appbar('قايمة الفواتير','كل فواتير المحل',gearBtn())+`
 <div class="content">
 <div class="search">${ic('search',18)}<input placeholder="دوّر برقم الفاتورة أو اسم الزبون…" value="${esc(state.iq||'')}" oninput="state.iq=this.value;render()"></div>
-${list.length?list.map(i=>{const c=cust(i.customerId);return `<div class="row" style="cursor:pointer" onclick="go('#/inv/${i.id}')"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${i.num.toLocaleString(AR)} · ${c?esc(c.name):'زبون نقدي'}</div><div class="s">${relDate(i.date)} · ${i.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(i.total)} <small>ج</small></div>${i.total-i.paid>0?`<span class="badge b-amber">باقي ${fmt(i.total-i.paid)}</span>`:(i.paid>i.total?`<span class="badge b-green">رصيد +${fmt(i.paid-i.total)}</span>`:'<span class="badge b-green">خالص ✓</span>')}</div><button style="color:var(--muted);padding:6px" onclick="event.stopPropagation();printInvoiceById('${i.id}')">${ic('printer',18)}</button></div>`;}).join(''):`<div class="empty"><div class="big">مفيش فواتير لسه</div>اعمل أول فاتورة من الزرار الأخضر تحت</div>`}
+${list.length?list.map(i=>{const c=cust(i.customerId);return `<div class="row" style="cursor:pointer" onclick="go('#/inv/${i.id}')"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${i.num.toLocaleString(AR)} · ${c?esc(c.name):'زبون نقدي'}</div><div class="s">${new Date(i.date).toLocaleString(AR,{day:'numeric',month:'numeric',hour:'numeric',minute:'2-digit'})} · ${i.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(i.total)} <small>ج</small></div>${i.total-i.paid>0?`<span class="badge b-amber">باقي ${fmt(i.total-i.paid)}</span>`:(i.paid>i.total?`<span class="badge b-green">رصيد +${fmt(i.paid-i.total)}</span>`:'<span class="badge b-green">خالص ✓</span>')}</div><button style="color:var(--muted);padding:6px" onclick="event.stopPropagation();printInvoiceById('${i.id}')">${ic('printer',18)}</button></div>`;}).join(''):`<div class="empty"><div class="big">مفيش فواتير لسه</div>اعمل أول فاتورة من الزرار الأخضر تحت</div>`}
 </div>`+navbar('home');}
 function vInvoiceDetail(id){const inv=DB.invoices.find(i=>i.id===id);if(!inv)return vInvoicesList();const c=cust(inv.customerId);
 const left=Math.round((inv.total-inv.paid)*100)/100;const sub=Math.round((inv.items.reduce((s2,it)=>s2+it.qty*it.price,0)+(inv.deliveryFee||0))*100)/100;
@@ -1151,7 +1155,7 @@ if(rows.length===1){toast('مفيش زباين ولا موردين');return;}
 downloadCSV('الأرصدة',rows);}
 /* ============ router ============ */
 function go(h){location.hash=h;}
-function render(){const h=location.hash||'#/';const app=$('#app');
+function render(top){const h=location.hash||'#/';const app=$('#app');
 if(!curUser){app.innerHTML=vLogin();return;}
 let html;
 if(h==='#/'||h==='#'){closeSheet();html=vDash();}
@@ -1170,11 +1174,11 @@ else if(h==='#/settings'){html=vSettings();}
 else if(h==='#/orders'){html=can('orders')?vOrders():vNoPerm();}
 else if(h==='#/users'){html=vUsers();}
 else{html=vDash();}
-app.innerHTML=html;window.scrollTo(0,0);
+app.innerHTML=html;if(top)window.scrollTo(0,0);
 hydratePhotos();
 if((h==='#/'||h==='#')&&SB.ready()&&Date.now()-shopOrdersAt>60000){refreshOrders(true);}
 if(Date.now()-lastSyncTick>45000){syncTick();}}
-window.addEventListener('hashchange',()=>{render();});
+window.addEventListener('hashchange',()=>{render(true);});
 setInterval(()=>{if(document.visibilityState==='visible')syncTick();},10000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncTick();else if(localStorage.getItem(DIRTY_KEY))pushCloudBackup(true);});
 window.addEventListener('pagehide',()=>{if(localStorage.getItem(DIRTY_KEY))pushCloudBackup(true);});
