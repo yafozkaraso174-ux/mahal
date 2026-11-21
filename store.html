@@ -41,6 +41,10 @@ input,textarea{font-family:inherit;font-size:15px}
 .prd button:disabled{background:#EDE7DA;color:var(--muted);cursor:default}
 .empty{text-align:center;color:var(--muted);font-size:13px;padding:36px 12px;font-weight:600;line-height:1.9}
 .empty .big{font-size:16px;font-weight:800;color:var(--ink);margin-bottom:4px}
+.dch{flex:1;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:11px 6px;font-size:13px;font-weight:800;color:var(--ink);font-family:inherit}
+.dch.on{border-color:var(--green);background:var(--green-soft);color:var(--green)}
+.dch.wide{width:100%;margin-bottom:7px;text-align:right;padding:12px 14px}
+.payinfo{background:#FDF3E3;border:1px solid #F0DFC0;border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:700;color:var(--ink);margin-top:2px;line-height:1.7}
 .cartbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 35%);z-index:15}
 .cartbar button{width:100%;background:var(--green);color:#fff;border-radius:16px;padding:15px 0;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 6px 16px rgba(28,122,84,.3)}
 .overlay{position:fixed;inset:0;background:rgba(35,32,26,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
@@ -127,6 +131,8 @@ const DEMO_PRODUCTS=[
 const DEMO_INFO={shop_name:'محل البركة',phone:''};
 let shopInfo={shop_name:'المتجر',phone:''};
 let products=null,loadErr=false,notReady=false;
+let payCfg=null;
+const CO={del:'delivery',pay:'',name:'',phone:'',addr:'',note:''};
 let cart={};
 try{cart=JSON.parse(localStorage.getItem('mahal_store_cart'))||{};}catch(e){cart={};}
 const saveCart=()=>localStorage.setItem('mahal_store_cart',JSON.stringify(cart));
@@ -140,13 +146,15 @@ try{
  const base=STORE_CFG.url.replace(/\/$/,'');
  const [pr,ir]=await Promise.all([
    fetch(base+'/rest/v1/products?select=id,name,cat,unit,price,stock,photo_url&order=cat,name',{headers:h}),
-   fetch(base+'/rest/v1/shop_info?select=shop_name,phone&id=eq.1',{headers:h}),
+   fetch(base+'/rest/v1/shop_info?select=shop_name,phone,payment,delivery_fee&id=eq.1',{headers:h}),
  ]);
  if(pr.status===404){notReady=true;products=[];render();return;}
  if(!pr.ok)throw 0;
  products=await pr.json();
  Object.keys(cart).forEach(id=>{const p=products.find(x=>x.id===id);if(!p||!p.stock||p.stock<=0)delete cart[id];else if(cart[id]>p.stock)cart[id]=p.stock;});saveCart();
- if(ir.ok){const rows=await ir.json();if(rows&&rows[0])shopInfo=Object.assign(shopInfo,rows[0]);}
+ if(ir.ok){let rows=null;try{rows=await ir.json();}catch(e){}
+ if(rows&&rows[0]){shopInfo=Object.assign(shopInfo,rows[0]);if(rows[0].payment&&typeof rows[0].payment==='object')payCfg=rows[0].payment;}
+ else if(ir.status===400){const r2=await fetch(base+'/rest/v1/shop_info?select=shop_name,phone&id=eq.1',{headers:h});if(r2.ok){const rows2=await r2.json();if(rows2&&rows2[0])shopInfo=Object.assign(shopInfo,rows2[0]);}}}
 }catch(e){loadErr=true;products=[];}
 render();}
 /* ============ views ============ */
@@ -176,40 +184,70 @@ cart[id]=cur+1;saveCart();render();}
 function chQty(id,d){const p=products.find(x=>x.id===id);let q=(cart[id]||0)+d;
 if(q<=0){delete cart[id];}else{if(p&&p.stock&&q>p.stock){toast('دي أقصى كمية متاحة');return;}cart[id]=q;}
 saveCart();render();if($('.overlay'))openCart();}
+function payMethods(){const m=[];if(!payCfg)return m;
+ if(payCfg.cash&&payCfg.cash.on)m.push({k:'cash',t:'💵 نقدي',d:'تدفع نقدي عند الاستلام'});
+ if(payCfg.vf&&payCfg.vf.on&&payCfg.vf.num)m.push({k:'vf',t:'فودافون كاش',d:'حوّل الإجمالي على المحفظة: '+payCfg.vf.num});
+ if(payCfg.insta&&payCfg.insta.on&&payCfg.insta.num)m.push({k:'insta',t:'إنستاباي',d:'حوّل الإجمالي على: '+payCfg.insta.num});
+ if(payCfg.bank&&payCfg.bank.on&&payCfg.bank.num)m.push({k:'bank',t:'تحويل بنكي',d:'حوّل الإجمالي على: '+payCfg.bank.num});
+ return m;}
 function openCart(){const items=Object.entries(cart).map(([id,q])=>({p:products.find(x=>x.id===id),q})).filter(x=>x.p);
+const methods=payMethods();const useNew=methods.length>0;
+if(useNew&&!methods.find(m=>m.k===CO.pay))CO.pay=methods[0].k;
+const selPay=methods.find(m=>m.k===CO.pay)||null;
+const fee=(useNew&&CO.del==='delivery')?Math.max(0,+shopInfo.delivery_fee||0):0;
 const o=document.createElement('div');o.className='overlay';o.onclick=e=>{if(e.target===o)o.remove();};
 o.innerHTML=`<div class="sheet"><div class="sheet-wrap"><button class="x" onclick="this.closest('.overlay').remove()">${ic('x')}</button><div class="st">سلتك</div>
 ${items.map(({p,q})=>`<div class="citem"><div class="mid"><div class="t">${esc(p.name)}</div><div class="s">${fmt(p.price)} ج / ${esc(p.unit||'قطعة')}</div></div><div class="qty"><button onclick="chQty('${p.id}',1)">＋</button><div class="n">${q.toLocaleString(AR)}</div><button onclick="chQty('${p.id}',-1)">−</button></div></div>`).join('')}
-<div class="trow"><span>الإجمالي</span><span>${fmt(cartTotal())} جنيه</span></div>
-<div class="field" style="margin-top:14px"><div class="lbl">اسمك</div><input id="ord-name" placeholder="اسم حضرتك"></div>
-<div class="field"><div class="lbl">موبايلك (عشان نأكد الطلب)</div><input id="ord-phone" inputmode="tel" placeholder="01xxxxxxxxx" style="direction:ltr;text-align:right"></div>
-<div class="field"><div class="lbl">العنوان أو أي ملاحظات</div><textarea id="ord-note" rows="2" placeholder="مثال: شارع كذا، الدور التالت…"></textarea></div>
+${fee>0?`<div class="trow"><span>الأصناف</span><span>${fmt(cartTotal())} جنيه</span></div>
+<div class="trow"><span>🚚 توصيل</span><span>${fmt(fee)} جنيه</span></div>`:''}
+<div class="trow"><span>الإجمالي</span><span>${fmt(cartTotal()+fee)} جنيه</span></div>
+<div class="field" style="margin-top:14px"><div class="lbl">اسمك</div><input id="ord-name" placeholder="اسم حضرتك" value="${esc(CO.name)}" oninput="CO.name=this.value"></div>
+<div class="field"><div class="lbl">موبايلك (عشان نأكد الطلب)</div><input id="ord-phone" inputmode="tel" placeholder="01xxxxxxxxx" style="direction:ltr;text-align:right" value="${esc(CO.phone)}" oninput="CO.phone=this.value"></div>
+${useNew?`<div class="field"><div class="lbl">طريقة الاستلام</div><div style="display:flex;gap:8px">
+<button class="dch ${CO.del==='delivery'?'on':''}" onclick="CO.del='delivery';openCart()">🚚 دليفري</button>
+<button class="dch ${CO.del==='pickup'?'on':''}" onclick="CO.del='pickup';openCart()">🏪 استلام من المحل</button></div></div>
+${CO.del==='delivery'?`<div class="field"><div class="lbl">العنوان بالتفصيل</div><textarea id="ord-addr" rows="2" placeholder="اسم الشارع، رقم العمارة، الدور، وأقرب علامة مميزة…" oninput="CO.addr=this.value">${esc(CO.addr)}</textarea></div>`:''}
+<div class="field"><div class="lbl">ملاحظات (اختياري)</div><textarea id="ord-note" rows="1" placeholder="أي حاجة تحب تضيفها…" oninput="CO.note=this.value">${esc(CO.note)}</textarea></div>
+<div class="field"><div class="lbl">طريقة الدفع</div>${methods.map(m=>`<button class="dch wide ${CO.pay===m.k?'on':''}" onclick="CO.pay='${m.k}';openCart()">${m.t}</button>`).join('')}
+${selPay?`<div class="payinfo">${esc(selPay.d)}${selPay.k!=='cash'?' — وبعد التحويل ابعتلنا صورة الإيصال واتساب':''}</div>`:''}</div>`
+:`<div class="field"><div class="lbl">العنوان أو أي ملاحظات</div><textarea id="ord-note" rows="2" placeholder="مثال: شارع كذا، الدور التالت…" oninput="CO.note=this.value">${esc(CO.note)}</textarea></div>`}
 <button class="btn btn-p" onclick="submitOrder(false)">ابعت الطلب ✓</button>
 ${shopInfo.phone?`<button class="btn btn-wa" style="margin-top:8px" onclick="submitOrder(true)">${ic('wa',18)} ابعت الطلب واتساب</button>`:''}
 </div></div>`;
 $('#overlay-root').innerHTML='';$('#overlay-root').appendChild(o);}
-async function submitOrder(viaWa){const name=($('#ord-name')||{}).value.trim();
-const phone=($('#ord-phone')||{}).value.trim();
-const note=($('#ord-note')||{}).value.trim();
+async function submitOrder(viaWa){const methods=payMethods();const useNew=methods.length>0;
+if(useNew&&!methods.find(m=>m.k===CO.pay))CO.pay=methods[0].k;
+const m=useNew?methods.find(x=>x.k===CO.pay):null;
+const name=CO.name.trim();
+const phone=CO.phone.trim();
+const note=CO.note.trim();
+const addr=CO.addr.trim();
 if(!name){toast('اكتب اسمك الأول');return;}
 if(!viaWa&&!phone){toast('اكتب رقم موبايلك عشان نأكد الطلب');return;}
+if(useNew&&CO.del==='delivery'&&!addr){toast('اكتب العنوان بالتفصيل عشان الدليفري يوصلك');return;}
 const items=Object.entries(cart).map(([id,q])=>{const p=products.find(x=>x.id===id);return p?{id,name:p.name,qty:q,price:p.price,unit:p.unit}:null;}).filter(Boolean);
 if(!items.length){toast('السلة فاضية');return;}
 for(const it of items){const p=products.find(x=>x.id===it.id);
  if(p&&typeof p.stock==='number'){if(p.stock<=0){toast('"'+p.name+'" غير متاح دلوقتي — شيله من السلة');return;}
  if(it.qty>p.stock){toast('المتاح من "'+p.name+'" حالياً '+p.stock.toLocaleString('ar-EG')+' — قلل الكمية');return;}}}
-const total=cartTotal();
-const waText='طلب جديد من '+shopInfo.shop_name+':\n'+items.map(it=>'• '+it.name+' × '+it.qty).join('\n')+'\nالإجمالي: '+fmt(total)+' جنيه'+(note?'\nملاحظات: '+note:'')+'\n— '+name+(phone?' ('+phone+')':'');
+const feeApplied=(useNew&&CO.del==='delivery')?Math.max(0,+shopInfo.delivery_fee||0):0;
+const total=Math.round((cartTotal()+feeApplied)*100)/100;
+const payload={customer_name:name,phone,note,items,total};
+if(useNew){payload.delivery=CO.del;payload.payment=CO.pay;if(CO.del==='delivery')payload.address=addr;if(feeApplied>0)payload.delivery_fee=feeApplied;}
+const waText='طلب جديد من '+shopInfo.shop_name+':\n'+items.map(it=>'• '+it.name+' × '+it.qty).join('\n')+'\nالإجمالي: '+fmt(total)+' جنيه'+(feeApplied>0?('\n🚚 شامل توصيل '+fmt(feeApplied)+' جنيه'):'')+(payload.delivery?('\n'+(CO.del==='pickup'?'🏪 استلام من المحل':'🚚 دليفري — '+addr)):'')+(m?('\n💳 الدفع: '+m.t):'')+(note?'\nملاحظات: '+note:'')+'\n— '+name+(phone?' ('+phone+')':'');
 if(viaWa||DEMO){if(shopInfo.phone){let ph=String(shopInfo.phone).replace(/\D/g,'');if(ph.startsWith('0'))ph='2'+ph;
  window.open('https://wa.me/'+ph+'?text='+encodeURIComponent(waText),'_blank');
  showDone(true);return;}
  if(DEMO){toast('دي نسخة تجريبية — الطلب الحقيقي هيشتغل لما المتجر يتفعّل');return;}}
 try{
- const r=await fetch(STORE_CFG.url.replace(/\/$/,'')+'/rest/v1/orders',{method:'POST',headers:{'apikey':STORE_CFG.anon,'Authorization':'Bearer '+STORE_CFG.anon,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({customer_name:name,phone,note,items,total})});
+ const post=(body)=>fetch(STORE_CFG.url.replace(/\/$/,'')+'/rest/v1/orders',{method:'POST',headers:{'apikey':STORE_CFG.anon,'Authorization':'Bearer '+STORE_CFG.anon,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(body)});
+ let r=await post(payload);
+ if(!r.ok&&useNew){const packed=[CO.del==='pickup'?'🏪 استلام من المحل':('🚚 دليفري — '+addr),feeApplied>0?('التوصيل: '+fmt(feeApplied)+' ج'):'',m?('الدفع: '+m.t):'',note].filter(Boolean).join('\n');
+  r=await post({customer_name:name,phone,note:packed,items,total});}
  if(!r.ok)throw 0;
  showDone(false);
 }catch(e){toast('في مشكلة في الإرسال — جرب واتساب أو تاني');}}
-function showDone(viaWa){$('#overlay-root').innerHTML='';cart={};saveCart();
+function showDone(viaWa){$('#overlay-root').innerHTML='';cart={};saveCart();CO.name='';CO.phone='';CO.addr='';CO.note='';
 $('#app').innerHTML=`<div class="hero"><h1>${esc(shopInfo.shop_name)}</h1></div>
 <div class="done-wrap"><div class="ck">${ic('check',34)}</div><h2>طلبك وصل ✓</h2><p>${viaWa?'كمّل الإرسال في واتساب والمحل هيرد عليك يأكد':'المحل هيراجع الطلب ويتصل بيك يأكد'}<br>شكراً ليك ❤</p><button class="btn btn-p" onclick="render()">ارجع للمتجر</button></div>`;}
 loadStore();

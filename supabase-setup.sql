@@ -84,3 +84,14 @@ using (bucket_id = 'product-photos');
 drop policy if exists "owner write product photos" on storage.objects;
 create policy "owner write product photos" on storage.objects for all to authenticated
 using (bucket_id = 'product-photos') with check (bucket_id = 'product-photos');
+
+-- ============================================================
+-- تحديث ٢١ نوفمبر ٢٠٢٦: الدليفري وطرق الدفع
+-- لو الجداول عندك اتعملت قبل التحديث ده، شغّل الأسطر دي مرة واحدة
+-- ============================================================
+alter table shop_info add column if not exists payment jsonb;
+alter table shop_info add column if not exists delivery_fee numeric not null default 0;
+alter table orders add column if not exists delivery text;
+alter table orders add column if not exists payment text;
+alter table orders add column if not exists address text;
+alter table orders add column if not exists delivery_fee numeric not null default 0;
