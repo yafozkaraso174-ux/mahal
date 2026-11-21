@@ -310,7 +310,7 @@ ${list.length?list.map(s=>{const b=suppBalance(s.id);return `<button class="row"
 function vCustDetail(id){const c=cust(id);if(!c)return vCustomers();const b=custBalance(id);
 const hist=[...DB.invoices.filter(i=>i.customerId===id).map(i=>({date:i.date,kind:'inv',obj:i})),...DB.payments.filter(p=>p.partyType==='c'&&p.partyId===id).map(p=>({date:p.date,kind:'pay',obj:p}))].sort((x,y)=>new Date(y.date)-new Date(x.date));
 const wa=waLink(c.phone,`السلام عليكم ${c.name}، ده تذكير بالباقي على حسابك عند ${DB.settings.shopName}: ${fmt(Math.max(b,0))} جنيه. شكراً ليك.`);
-return `<div class="appbar"><div>${backBtn('#/customers')}<div class="shop" style="margin-top:4px">حساب زبون</div></div><button style="color:var(--muted)" onclick="openPartySheet('c','${id}')">${ic('pencil')}</button></div>
+return `<div class="appbar"><div>${backBtn('#/customers')}<div class="shop" style="margin-top:4px">حساب زبون</div></div><div style="display:flex;gap:12px;align-items:center"><button style="color:var(--muted)" onclick="printStatement('c','${id}')">${ic('printer')}</button><button style="color:var(--muted)" onclick="openPartySheet('c','${id}')">${ic('pencil')}</button></div></div>
 <div class="content">
 <div class="cust-head">
  <div class="av">${esc(c.name.trim()[0]||'؟')}</div>
@@ -325,13 +325,13 @@ return `<div class="appbar"><div>${backBtn('#/customers')}<div class="shop" styl
  </div>
 </div>
 <div class="sec-title">الحركات على حسابه</div>
-${hist.length?hist.map(h=>h.kind==='inv'?`<div class="row"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${h.obj.num.toLocaleString(AR)}</div><div class="s">${relDate(h.obj.date)} · ${h.obj.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(h.obj.total)} <small>ج</small></div>${h.obj.total-h.obj.paid>0?`<span class="badge b-amber">باقي ${fmt(h.obj.total-h.obj.paid)}</span>`:'<span class="badge b-green">خالص ✓</span>'}</div></div>`
+${hist.length?hist.map(h=>h.kind==='inv'?`<div class="row"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${h.obj.num.toLocaleString(AR)}</div><div class="s">${relDate(h.obj.date)} · ${h.obj.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(h.obj.total)} <small>ج</small></div>${h.obj.total-h.obj.paid>0?`<span class="badge b-amber">باقي ${fmt(h.obj.total-h.obj.paid)}</span>`:'<span class="badge b-green">خالص ✓</span>'}</div><button style="color:var(--muted);padding:6px" onclick="printInvoiceById('${h.obj.id}')">${ic('printer',18)}</button></div>`
 :`<div class="row"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('cash')}</div><div class="mid"><div class="t">دفعة ${h.obj.note?('· '+esc(h.obj.note)):''}</div><div class="s">${relDate(h.obj.date)}</div></div><div class="end"><div class="amt" style="color:var(--green)">+${fmt(h.obj.amount)} <small>ج</small></div></div></div>`).join(''):`<div class="empty">لسه مفيش حركات على حسابه</div>`}
 <button class="btn-danger" onclick="confirmSheet('هتمسح الزبون ده وفواتيره هتفضل محفوظة من غير اسمه. متأكد؟','امسح الزبون',()=>{DB.customers=DB.customers.filter(x=>x.id!=='${id}');save();go('#/customers');toast('اتمسح');})">مسح الزبون</button>
 </div>`+navbar('users');}
 function vSuppDetail(id){const s=supp(id);if(!s)return vSuppliers();const b=suppBalance(id);
 const hist=[...DB.purchases.filter(i=>i.supplierId===id).map(i=>({date:i.date,kind:'pur',obj:i})),...DB.payments.filter(p=>p.partyType==='s'&&p.partyId===id).map(p=>({date:p.date,kind:'pay',obj:p}))].sort((x,y)=>new Date(y.date)-new Date(x.date));
-return `<div class="appbar"><div>${backBtn('#/suppliers')}<div class="shop" style="margin-top:4px">حساب مورد</div></div><button style="color:var(--muted)" onclick="openPartySheet('s','${id}')">${ic('pencil')}</button></div>
+return `<div class="appbar"><div>${backBtn('#/suppliers')}<div class="shop" style="margin-top:4px">حساب مورد</div></div><div style="display:flex;gap:12px;align-items:center"><button style="color:var(--muted)" onclick="printStatement('s','${id}')">${ic('printer')}</button><button style="color:var(--muted)" onclick="openPartySheet('s','${id}')">${ic('pencil')}</button></div></div>
 <div class="content">
 <div class="cust-head">
  <div class="av" style="background:var(--amber-soft);color:#9A6A14">${esc(s.name.trim()[0]||'؟')}</div>
@@ -404,6 +404,21 @@ function printInvoice(inv){const c=cust(inv.customerId);$('#print-area').innerHT
 ${inv.items.map(it=>`<tr><td>${esc(it.name)}</td><td>${fmt(it.qty)} ${esc(it.unit)}</td><td>${fmt(it.price)}</td><td>${fmt(it.qty*it.price)}</td></tr>`).join('')}</table>
 <div class="p-tot">الإجمالي: ${fmt(inv.total)} جنيه<br>المدفوع: ${fmt(inv.paid)} جنيه<br><b>الباقي: ${fmt(inv.total-inv.paid)} جنيه</b></div>
 <div class="p-foot">شكراً لتعاملكم معانا — ${esc(DB.settings.shopName)}</div>`;}
+function printInvoiceById(id){const inv=DB.invoices.find(i=>i.id===id);if(!inv)return;printInvoice(inv);setTimeout(()=>window.print(),80);}
+function printStatement(type,id){const isC=type==='c';const x=isC?cust(id):supp(id);if(!x)return;
+const bal=isC?custBalance(id):suppBalance(id);const rows=[];
+if(isC){DB.invoices.filter(i=>i.customerId===id).forEach(i=>rows.push({date:i.date,text:'فاتورة #'+i.num.toLocaleString(AR)+(i.paid>0?' (دفع منها '+fmt(i.paid)+' ج)':''),debit:i.total-i.paid,credit:0}));
+DB.payments.filter(p=>p.partyType==='c'&&p.partyId===id).forEach(p=>rows.push({date:p.date,text:'دفعة'+(p.note?' — '+p.note:''),debit:0,credit:p.amount}));}
+else{DB.purchases.filter(i=>i.supplierId===id).forEach(i=>rows.push({date:i.date,text:'توريد'+(i.paid>0?' (اتدفع منه '+fmt(i.paid)+' ج)':''),debit:i.total-i.paid,credit:0}));
+DB.payments.filter(p=>p.partyType==='s'&&p.partyId===id).forEach(p=>rows.push({date:p.date,text:'دفعة'+(p.note?' — '+p.note:''),debit:0,credit:p.amount}));}
+rows.sort((a,b)=>new Date(a.date)-new Date(b.date));
+$('#print-area').innerHTML=`
+<div class="p-head"><h1>${esc(DB.settings.shopName)}</h1><p>كشف حساب ${isC?'زبون':'مورد'}: ${esc(x.name)} · ${new Date().toLocaleDateString(AR,{day:'numeric',month:'long',year:'numeric'})}</p></div>
+<table class="p-items"><tr><th>التاريخ</th><th>البيان</th><th>${isC?'عليه':'له'}</th><th>${isC?'دفع':'سددنا'}</th></tr>
+${rows.length?rows.map(r=>`<tr><td>${new Date(r.date).toLocaleDateString(AR,{day:'numeric',month:'numeric'})}</td><td>${esc(r.text)}</td><td>${r.debit?fmt(r.debit):''}</td><td>${r.credit?fmt(r.credit):''}</td></tr>`).join(''):`<tr><td colspan="4" style="text-align:center">لسه مفيش حركات</td></tr>`}</table>
+<div class="p-tot"><b>${bal>0?(isC?'الباقي عليه: ':'الباقي له: ')+fmt(bal)+' جنيه':'الحساب خالص ✓'}</b></div>
+<div class="p-foot">${esc(DB.settings.shopName)}</div>`;
+setTimeout(()=>window.print(),80);}
 /* ============ invoice drafts ============ */
 function saveInvDraft(){const d=invDraft;if(!d.items.length){toast('ضيف صنف واحد على الأقل');return;}
 const data={customerId:d.customerId||'',priceType:d.priceType,items:d.items.map(it=>({...it})),paid:d.paid||''};
@@ -524,6 +539,11 @@ function vSettings(){return `<div class="appbar"><div>${backBtn('#/')}<div class
 <button class="set-row" onclick="exportData()">${ic('download')}<span>نزّل نسخة احتياطية<span class="s" style="display:block">ملف فيه كل بياناتك — نزّله كل فترة وابعته لنفسك واتساب</span></span></button>
 <button class="set-row" onclick="document.getElementById('imp-file').click()">${ic('upload')}<span>رجّع نسخة احتياطية<span class="s" style="display:block">لو غيرت الموبايل أو مسحت المتصفح</span></span></button>
 <input type="file" id="imp-file" accept=".json,application/json" style="display:none" onchange="importData(this)">
+<div class="sec-title">التقارير (Excel)</div>
+<button class="set-row" onclick="exportProducts()">${ic('download')}<span>المخزون والأصناف<span class="s" style="display:block">كل الأصناف بالأسعار والكميات — يفتح في Excel</span></span></button>
+<button class="set-row" onclick="exportInvoices()">${ic('download')}<span>الفواتير والمبيعات<span class="s" style="display:block">كل فاتورة بتاريخها وقيمتها وربحها</span></span></button>
+<button class="set-row" onclick="exportPurchases()">${ic('download')}<span>التوريدات<span class="s" style="display:block">كل البضاعة اللي دخلت من الموردين</span></span></button>
+<button class="set-row" onclick="exportParties()">${ic('download')}<span>أرصدة الزباين والموردين<span class="s" style="display:block">مين عليه كام ومين لك عنده</span></span></button>
 <div class="sec-title">منطقة الخطر</div>
 <button class="set-row" style="color:var(--red)" onclick="confirmSheet('هيمسح كل البيانات ويرجع الأصناف الافتراضية من الأول. متأكد؟','امسح كل حاجة',()=>{DB=seed();save();go('#/');render();toast('رجعنا للبيانات الافتراضية');})">${ic('trash')}<span>امسح كل البيانات وابدأ من جديد</span></button>
 <div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · النسخة التانية · بياناتك متخزنة على جهازك بس</div>
@@ -533,6 +553,24 @@ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=
 function importData(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
 r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.products||!d.settings)throw 0;if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;DB=d;save();render();toast('النسخة رجعت ✓');}catch(e){toast('الملف ده مش نسخة صحيحة');}};
 r.readAsText(f);}
+function csvCell(v){const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function downloadCSV(name,rows){const csv='\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'-'+todayStr()+'.csv';a.click();toast('الملف نزل ✓ — يفتح في Excel');}
+function exportProducts(){if(!DB.products.length){toast('مفيش أصناف');return;}
+downloadCSV('المخزون',[['الصنف','الفئة','الوحدة','سعر الجملة','سعر القطاعي','التكلفة (آخر شراء)','الكمية'],...DB.products.map(p=>[p.name,p.cat,p.unit,p.wPrice,p.rPrice,p.cost,p.stock])]);}
+function exportInvoices(){if(!DB.invoices.length){toast('لسه مفيش فواتير');return;}
+const rows=[...DB.invoices].sort((a,b)=>a.num-b.num).map(i=>{const c=cust(i.customerId);const profit=i.items.reduce((s,it)=>s+(it.price-it.cost)*it.qty,0);
+return[i.num,i.date.slice(0,10),c?c.name:'(زبون محذوف)',i.priceType==='w'?'جملة':'قطاعي',i.total,i.paid,i.total-i.paid,Math.round(profit*100)/100];});
+downloadCSV('الفواتير',[['رقم الفاتورة','التاريخ','الزبون','النوع','الإجمالي','المدفوع','الباقي','الربح'],...rows]);}
+function exportPurchases(){if(!DB.purchases.length){toast('لسه مفيش توريدات');return;}
+const rows=[...DB.purchases].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(pu=>{const s=supp(pu.supplierId);
+return[pu.date.slice(0,10),s?s.name:'(مورد محذوف)',pu.items.map(it=>it.name+' × '+fmt(it.qty)+' '+it.unit).join(' + '),pu.total,pu.paid,pu.total-pu.paid];});
+downloadCSV('التوريدات',[['التاريخ','المورد','الأصناف','الإجمالي','المدفوع','الباقي'],...rows]);}
+function exportParties(){const rows=[['الاسم','النوع','التليفون','الرصيد']];
+DB.customers.forEach(c=>{const b=custBalance(c.id);rows.push([c.name,'زبون '+(c.type==='w'?'جملة':'قطاعي'),c.phone||'',b>0?'عليه '+b:'خالص']);});
+DB.suppliers.forEach(s=>{const b=suppBalance(s.id);rows.push([s.name,'مورد',s.phone||'',b>0?'له '+b:'خالص']);});
+if(rows.length===1){toast('مفيش زباين ولا موردين');return;}
+downloadCSV('الأرصدة',rows);}
 /* ============ router ============ */
 function go(h){location.hash=h;}
 function render(){const h=location.hash||'#/';const app=$('#app');
