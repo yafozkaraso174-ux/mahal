@@ -306,7 +306,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r11';
+const APP_VER='2026-11-21r12';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -520,14 +520,17 @@ function backupStatusText(){SB.load();if(!(SB.cfg.url&&SB.cfg.anon))return 'حط
 function syncDiagHTML(){const s=syncGet();const a=authGet();const dirty=!!localStorage.getItem(DIRTY_KEY);
  const row=(k,v)=>`<div class="trow" style="padding:6px 2px"><span class="k">${k}</span><span style="font-weight:700;font-size:12.5px;text-align:left">${v}</span></div>`;
  return `<div class="total-card" style="margin-top:6px">
+ ${row('نسخة التطبيق',APP_VER)}
  ${row('الحساب',a&&a.email?esc(a.email):'مفيش — سجّل دخولك')}
  ${row('الصلاحية',curUser?(curUser.owner?'صاحب المحل 👑':'موظف — المزامنة للمالك بس'):'—')}
  ${row('آخر رفع ناجح',s.lastPush?relDate(s.lastPush):(localStorage.getItem('mahal_last_backup')?relDate(localStorage.getItem('mahal_last_backup')):'لسه'))}
  ${row('آخر سحب',s.lastPull?relDate(s.lastPull):'لسه')}
  ${row('تغييرات مستنية تترفع',dirty?'آه — هتترفع خلال ثوانٍ':'لأ ✓')}
  ${s.lastErr?row('آخر خطأ','<span style="color:var(--red)">'+esc(s.lastErr)+'</span>'):''}
- <button class="cbtn" style="width:100%;margin-top:6px;background:var(--green);color:#fff" onclick="doSyncNow()">زامن دلوقتي 🔄</button>
- </div>`;}
+ <div style="display:flex;gap:6px;margin-top:6px">
+ <button class="cbtn" style="flex:1;background:var(--green);color:#fff" onclick="doSyncNow()">زامن دلوقتي 🔄</button>
+ <button class="cbtn" style="flex:1;background:var(--blue);color:#fff" onclick="doForceUpdate()">تحديث النسخة ⬆️</button>
+ </div></div>`;}
 async function doSyncNow(){if(!SB.ready()||!authGet()){toast('سجّل دخولك الأول');return;}
  if(!curUser||!curUser.owner){toast('المزامنة شغالة على حساب صاحب المحل بس');return;}
  toast('بزامن…');
@@ -537,6 +540,13 @@ async function doSyncNow(){if(!SB.ready()||!authGet()){toast('سجّل دخول�
   toast(s.lastErr?('في مشكلة: '+s.lastErr):'تمت المزامنة ✓');
  }catch(e){toast('في مشكلة في الاتصال — جرب تاني');}
  render();}
+async function doForceUpdate(){if(!('serviceWorker' in navigator)){toast('المتصفح ده مش بيدعم التحديث التلقائي');return;}
+ toast('بدوّر على تحديث…');
+ try{const reg=await navigator.serviceWorker.getRegistration();
+  if(!reg){location.reload();return;}
+  await reg.update();
+  setTimeout(()=>{if(!window.__updating)toast('انت على آخر نسخة ✓ ('+APP_VER+')');},4000);
+ }catch(e){toast('مشكلة في التحديث — اقفل التطبيق وافتحه تاني');}}
 function applyRemoteDB(d){if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;if(!Array.isArray(d.users))d.users=[];if(!Array.isArray(d.movements))d.movements=[];
  applyingRemote=true;DB=d;localStorage.setItem(KEY,JSON.stringify(DB));applyingRemote=false;}
 async function syncTick(){lastSyncTick=Date.now();
@@ -1135,7 +1145,8 @@ setInterval(()=>{if(document.visibilityState==='visible')syncTick();},60000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncTick();else if(localStorage.getItem(DIRTY_KEY))pushCloudBackup(true);});
 window.addEventListener('pagehide',()=>{if(localStorage.getItem(DIRTY_KEY))pushCloudBackup(true);});
 render();
-if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});
+ navigator.serviceWorker.addEventListener('controllerchange',function(){if(!window.__reloaded){window.__reloaded=true;window.__updating=true;location.reload();}});}
 </script>
 </body>
 </html>
