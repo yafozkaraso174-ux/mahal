@@ -145,6 +145,7 @@ try{
  if(pr.status===404){notReady=true;products=[];render();return;}
  if(!pr.ok)throw 0;
  products=await pr.json();
+ Object.keys(cart).forEach(id=>{const p=products.find(x=>x.id===id);if(!p||!p.stock||p.stock<=0)delete cart[id];else if(cart[id]>p.stock)cart[id]=p.stock;});saveCart();
  if(ir.ok){const rows=await ir.json();if(rows&&rows[0])shopInfo=Object.assign(shopInfo,rows[0]);}
 }catch(e){loadErr=true;products=[];}
 render();}
@@ -167,7 +168,7 @@ ${list.length?cats.map(c=>`<div class="cat-t">${esc(c)}</div><div class="grid">$
 </div>
 ${cartCount()?`<div class="cartbar"><button onclick="openCart()">${ic('cart',20)} السلة · ${cartCount().toLocaleString(AR)} صنف · ${fmt(cartTotal())} جنيه</button></div>`:''}`;}
 function prdHTML(p){const out=!p.stock||p.stock<=0;const inCart=cart[p.id]||0;
-return `<div class="prd">${p.photo_url?`<img class="ph" src="${esc(p.photo_url)}" loading="lazy" alt="${esc(p.name)}">`:`<div class="ph ph-none">${ic('box',34)}</div>`}<div class="nm">${esc(p.name)}</div><div class="pr">${fmt(p.price)} <small>جنيه / ${esc(p.unit||'قطعة')}</small></div><div class="stk ${out?'':'ok'}">${out?'<span style="color:var(--red)">خلصت مؤقتاً</span>':inCart?('في السلة: '+inCart.toLocaleString(AR)):'متاح'}</div><button ${out?'disabled':''} onclick="addToCart('${p.id}')">${out?'مش متاح':'ضيف للسلة ＋'}</button></div>`;}
+return `<div class="prd">${p.photo_url?`<img class="ph" src="${esc(p.photo_url)}" loading="lazy" alt="${esc(p.name)}">`:`<div class="ph ph-none">${ic('box',34)}</div>`}<div class="nm">${esc(p.name)}</div><div class="pr">${fmt(p.price)} <small>جنيه / ${esc(p.unit||'قطعة')}</small></div><div class="stk ${out?'':'ok'}">${out?'<span style="color:var(--red)">غير متاح</span>':inCart?('في السلة: '+inCart.toLocaleString(AR)):'متاح'}</div><button ${out?'disabled':''} onclick="addToCart('${p.id}')">${out?'غير متاح':'ضيف للسلة ＋'}</button></div>`;}
 function addToCart(id){const p=products.find(x=>x.id===id);if(!p)return;
 const cur=cart[id]||0;
 if(p.stock&&cur>=p.stock){toast('دي أقصى كمية متاحة دلوقتي');return;}
@@ -194,6 +195,9 @@ if(!name){toast('اكتب اسمك الأول');return;}
 if(!viaWa&&!phone){toast('اكتب رقم موبايلك عشان نأكد الطلب');return;}
 const items=Object.entries(cart).map(([id,q])=>{const p=products.find(x=>x.id===id);return p?{id,name:p.name,qty:q,price:p.price,unit:p.unit}:null;}).filter(Boolean);
 if(!items.length){toast('السلة فاضية');return;}
+for(const it of items){const p=products.find(x=>x.id===it.id);
+ if(p&&typeof p.stock==='number'){if(p.stock<=0){toast('"'+p.name+'" غير متاح دلوقتي — شيله من السلة');return;}
+ if(it.qty>p.stock){toast('المتاح من "'+p.name+'" حالياً '+p.stock.toLocaleString('ar-EG')+' — قلل الكمية');return;}}}
 const total=cartTotal();
 const waText='طلب جديد من '+shopInfo.shop_name+':\n'+items.map(it=>'• '+it.name+' × '+it.qty).join('\n')+'\nالإجمالي: '+fmt(total)+' جنيه'+(note?'\nملاحظات: '+note:'')+'\n— '+name+(phone?' ('+phone+')':'');
 if(viaWa||DEMO){if(shopInfo.phone){let ph=String(shopInfo.phone).replace(/\D/g,'');if(ph.startsWith('0'))ph='2'+ph;
