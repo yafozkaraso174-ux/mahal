@@ -28,7 +28,9 @@ input,textarea{font-family:inherit;font-size:15px}
 .search input{border:none;outline:none;flex:1;font-size:13.5px;background:transparent;color:var(--ink)}
 .cat-t{font-size:14px;font-weight:800;margin:14px 2px 8px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.prd{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.prd{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.prd .ph{width:100%;aspect-ratio:1;border-radius:12px;object-fit:cover;background:var(--green-soft);display:block}
+.prd .ph-none{display:flex;align-items:center;justify-content:center;color:var(--green)}
 .prd .nm{font-size:13.5px;font-weight:800;line-height:1.5;min-height:40px}
 .prd .pr{font-size:15px;font-weight:800;color:var(--green)}
 .prd .pr small{font-size:10.5px;color:var(--muted);font-weight:600}
@@ -128,7 +130,7 @@ try{
  const h={'apikey':STORE_CFG.anon,'Authorization':'Bearer '+STORE_CFG.anon};
  const base=STORE_CFG.url.replace(/\/$/,'');
  const [pr,ir]=await Promise.all([
-   fetch(base+'/rest/v1/products?select=id,name,cat,unit,price,stock&order=cat,name',{headers:h}),
+   fetch(base+'/rest/v1/products?select=id,name,cat,unit,price,stock,photo_url&order=cat,name',{headers:h}),
    fetch(base+'/rest/v1/shop_info?select=shop_name,phone&id=eq.1',{headers:h}),
  ]);
  if(!pr.ok)throw 0;
@@ -154,7 +156,7 @@ ${list.length?cats.map(c=>`<div class="cat-t">${esc(c)}</div><div class="grid">$
 </div>
 ${cartCount()?`<div class="cartbar"><button onclick="openCart()">${ic('cart',20)} السلة · ${cartCount().toLocaleString(AR)} صنف · ${fmt(cartTotal())} جنيه</button></div>`:''}`;}
 function prdHTML(p){const out=!p.stock||p.stock<=0;const inCart=cart[p.id]||0;
-return `<div class="prd"><div class="nm">${esc(p.name)}</div><div class="pr">${fmt(p.price)} <small>جنيه / ${esc(p.unit||'قطعة')}</small></div><div class="stk ${out?'':'ok'}">${out?'<span style="color:var(--red)">خلصت مؤقتاً</span>':inCart?('في السلة: '+inCart.toLocaleString(AR)):'متاح'}</div><button ${out?'disabled':''} onclick="addToCart('${p.id}')">${out?'مش متاح':'ضيف للسلة ＋'}</button></div>`;}
+return `<div class="prd">${p.photo_url?`<img class="ph" src="${esc(p.photo_url)}" loading="lazy" alt="${esc(p.name)}">`:`<div class="ph ph-none">${ic('box',34)}</div>`}<div class="nm">${esc(p.name)}</div><div class="pr">${fmt(p.price)} <small>جنيه / ${esc(p.unit||'قطعة')}</small></div><div class="stk ${out?'':'ok'}">${out?'<span style="color:var(--red)">خلصت مؤقتاً</span>':inCart?('في السلة: '+inCart.toLocaleString(AR)):'متاح'}</div><button ${out?'disabled':''} onclick="addToCart('${p.id}')">${out?'مش متاح':'ضيف للسلة ＋'}</button></div>`;}
 function addToCart(id){const p=products.find(x=>x.id===id);if(!p)return;
 const cur=cart[id]||0;
 if(p.stock&&cur>=p.stock){toast('دي أقصى كمية متاحة دلوقتي');return;}

@@ -11,8 +11,12 @@ create table if not exists products (
   unit text,
   price numeric not null default 0,
   stock numeric not null default 0,
+  photo_url text,
   updated_at timestamptz default now()
 );
+
+-- لو الجدول اتعمل قبل كده من غير عمود الصور
+alter table products add column if not exists photo_url text;
 
 -- جدول بيانات المحل (اسم المحل ورقم الواتساب اللي يظهر للزباين)
 create table if not exists shop_info (
@@ -63,3 +67,20 @@ create policy "owner all shop_info" on shop_info for all to authenticated using 
 
 drop policy if exists "owner all orders" on orders;
 create policy "owner all orders" on orders for all to authenticated using (true) with check (true);
+
+-- ============================================================
+-- صور الأصناف (Supabase Storage)
+-- ============================================================
+
+-- باكت عام للصور (الزوار يشوفوا الصور، بس محدش يقدر يرفع أو يعدّل غير صاحب المحل)
+insert into storage.buckets (id, name, public)
+values ('product-photos', 'product-photos', true)
+on conflict (id) do nothing;
+
+drop policy if exists "public read product photos" on storage.objects;
+create policy "public read product photos" on storage.objects for select to anon
+using (bucket_id = 'product-photos');
+
+drop policy if exists "owner write product photos" on storage.objects;
+create policy "owner write product photos" on storage.objects for all to authenticated
+using (bucket_id = 'product-photos') with check (bucket_id = 'product-photos');

@@ -146,6 +146,10 @@ button.row{cursor:pointer}
 .ord .ob-no{background:var(--red-soft);color:var(--red)}
 .ord .ob-wa{background:var(--green-soft);color:var(--green);text-decoration:none;display:flex;align-items:center;justify-content:center;gap:4px}
 .ord.done{opacity:.6}
+.pimg{width:38px;height:38px;border-radius:12px;object-fit:cover;flex-shrink:0;background:var(--green-soft)}
+.photo-pick{width:100%;aspect-ratio:16/9;border-radius:16px;border:1.5px dashed #CFC5B0;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:12.5px;font-weight:800;cursor:pointer;overflow:hidden;position:relative}
+.photo-pick img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.photo-pick .ov{position:absolute;inset-inline-end:8px;bottom:8px;background:rgba(35,32,26,.75);color:#fff;font-size:11px;font-weight:800;padding:5px 11px;border-radius:99px}
 #print-area{display:none}
 @media print{
   body>*{display:none!important}
@@ -271,6 +275,32 @@ localStorage.setItem(PIN_KEY,await pinHash(n1.trim()));closeSheet();render();toa
 async function doRemovePin(){const old=($('#pin-old')||{}).value||'';
 if(await pinHash(old)!==localStorage.getItem(PIN_KEY)){toast('القفل غلط');return;}
 localStorage.removeItem(PIN_KEY);closeSheet();render();toast('القفل اتشال ✓');}
+/* ============ صور الأصناف (تخزين محلي IndexedDB) ============ */
+const PHOTOS={
+ db:null,
+ open(){return new Promise((res,rej)=>{if(this.db)return res(this.db);const r=indexedDB.open('mahal_photos',1);r.onupgradeneeded=()=>r.result.createObjectStore('photos');r.onsuccess=()=>{this.db=r.result;res(this.db);};r.onerror=()=>rej(r.error);});},
+ async set(id,blob){const db=await this.open();return new Promise((res,rej)=>{const tx=db.transaction('photos','readwrite');tx.objectStore('photos').put(blob,id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});},
+ async get(id){const db=await this.open();return new Promise((res,rej)=>{const rq=db.transaction('photos').objectStore('photos').get(id);rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>rej(rq.error);});},
+ async del(id){const db=await this.open();return new Promise((res,rej)=>{const tx=db.transaction('photos','readwrite');tx.objectStore('photos').delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+};
+const photoURLs={};
+function photoObjUrl(id,blob){if(photoURLs[id])URL.revokeObjectURL(photoURLs[id]);photoURLs[id]=URL.createObjectURL(blob);return photoURLs[id];}
+async function hydratePhotos(root){const imgs=(root||document).querySelectorAll('img[data-pid]:not([src])');
+for(const img of imgs){const pid=img.dataset.pid;try{let u=photoURLs[pid];
+ if(!u){const blob=await PHOTOS.get(pid);if(!blob){img.replaceWith(imgPhFallback(pid));continue;}u=photoObjUrl(pid,blob);}
+ img.src=u;}catch(e){}}
+}
+function imgPhFallback(pid){const p=prod(pid);const d=document.createElement('div');d.className='ic';d.style.cssText='width:38px;height:38px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--green-soft);color:var(--green)';d.innerHTML=ic(catIcon(p?p.cat:''));return d;}
+async function processPhotoFile(file){const bmp=await createImageBitmap(file);const max=640;const sc=Math.min(1,max/Math.max(bmp.width,bmp.height));
+const c=document.createElement('canvas');c.width=Math.max(1,Math.round(bmp.width*sc));c.height=Math.max(1,Math.round(bmp.height*sc));
+c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+return await new Promise(res=>c.toBlob(res,'image/jpeg',0.82));}
+let pendingPhoto=null;
+async function pickProductPhoto(inp){const f=inp.files&&inp.files[0];if(!f)return;
+try{const blob=await processPhotoFile(f);pendingPhoto={blob,url:URL.createObjectURL(blob)};
+ const w=$('#fp-photo-wrap');if(w){w.innerHTML=`<img src="${pendingPhoto.url}" alt=""><span class="ov">غيّر الصورة</span>`;}
+}catch(e){toast('الصورة دي مش راضية تتقري — جرب صورة تانية');}}
+function markPhotoRemove(){pendingPhoto='REMOVE';const w=$('#fp-photo-wrap');if(w){w.innerHTML=`${ic('box',28)}<span>اضغط عشان تضيف صورة</span>`;}const rb=$('#fp-photo-rm');if(rb)rb.remove();toast('الصورة هتتشال مع الحفظ');}
 /* ============ المتجر الإلكتروني (Supabase) ============ */
 const SB={
 key:'mahal_shop_cfg',cfg:null,token:null,tokenExp:0,
@@ -284,8 +314,14 @@ async login(){this.load();if(this.token&&Date.now()<this.tokenExp)return;
 async req(path,opt){opt=opt||{};this.load();const h=Object.assign({'apikey':this.cfg.anon,'Authorization':'Bearer '+(this.token||this.cfg.anon)},opt.headers||{});
  const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/rest/v1/'+path,Object.assign({},opt,{headers:h}));
  if(!r.ok)throw new Error('req-failed:'+r.status);if(r.status===204)return null;const t=await r.text();return t?JSON.parse(t):null;},
+photoUrlFor(p){return this.cfg.url.replace(/\/$/,'')+'/storage/v1/object/public/product-photos/'+encodeURIComponent(p.id)+'.jpg?v='+(p.photoVer||1);},
+async uploadPhoto(id,blob){const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/storage/v1/object/product-photos/'+encodeURIComponent(id)+'.jpg',{method:'POST',headers:{'apikey':this.cfg.anon,'Authorization':'Bearer '+this.token,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
+ if(!r.ok)throw new Error('photo-upload-failed:'+r.status);},
 async pushProducts(){await this.login();
- const rows=DB.products.map(p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,stock:p.stock,updated_at:new Date().toISOString()}));
+ const ups=JSON.parse(localStorage.getItem('mahal_photo_up')||'{}');
+ for(const p of DB.products){if(p.photo&&p.photoVer&&ups[p.id]!==p.photoVer){const blob=await PHOTOS.get(p.id);if(blob){await this.uploadPhoto(p.id,blob);ups[p.id]=p.photoVer;}}}
+ localStorage.setItem('mahal_photo_up',JSON.stringify(ups));
+ const rows=DB.products.map(p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,stock:p.stock,photo_url:p.photo?this.photoUrlFor(p):null,updated_at:new Date().toISOString()}));
  await this.req('products',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
  const info=[{id:1,shop_name:DB.settings.shopName,owner_name:DB.settings.ownerName||'',phone:DB.settings.phone||'',updated_at:new Date().toISOString()}];
  await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});
@@ -390,7 +426,7 @@ return appbar('المخزون','الأصناف والكميات',`<button class=
 <div id="plist">${prodListHTML(list)}</div>
 </div>`+navbar('box');}
 function prodListHTML(list){if(!list.length)return `<div class="empty"><div class="big">مفيش أصناف هنا</div>ضيف صنف جديد من الزرار اللي فوق</div>`;
-return list.map(p=>`<button class="row" onclick="openProductSheet('${p.id}')"><div class="ic" style="background:${p.cat==='زيوت وسمنة'?'var(--amber-soft);color:#9A6A14':p.cat==='فول وبقوليات'?'var(--green-soft);color:var(--green)':'var(--blue-soft);color:var(--blue)'}">${ic(catIcon(p.cat))}</div><div class="mid"><div class="t">${esc(p.name)}</div><div class="s">جملة ${fmt(p.wPrice)} · قطاعي ${fmt(p.rPrice)}</div></div><div class="end"><div class="amt">${fmt(p.stock)} <small>${esc(p.unit)}</small></div>${p.stock<=p.lowAt?'<span class="badge b-red">قرب يخلص</span>':''}</div></button>`).join('');}
+return list.map(p=>`<button class="row" onclick="openProductSheet('${p.id}')">${p.photo?`<img class="pimg" data-pid="${p.id}" alt="">`:`<div class="ic" style="background:${p.cat==='زيوت وسمنة'?'var(--amber-soft);color:#9A6A14':p.cat==='فول وبقوليات'?'var(--green-soft);color:var(--green)':'var(--blue-soft);color:var(--blue)'}">${ic(catIcon(p.cat))}</div>`}<div class="mid"><div class="t">${esc(p.name)}</div><div class="s">جملة ${fmt(p.wPrice)} · قطاعي ${fmt(p.rPrice)}</div></div><div class="end"><div class="amt">${fmt(p.stock)} <small>${esc(p.unit)}</small></div>${p.stock<=p.lowAt?'<span class="badge b-red">قرب يخلص</span>':''}</div></button>`).join('');}
 function refreshList(){const q=state.q.trim();const list=DB.products.filter(p=>(state.cat==='الكل'||p.cat===state.cat)&&(!q||p.name.includes(q)));$('#plist').innerHTML=prodListHTML(list);}
 function vCustomers(){const q=(state.cq||'').trim();const list=DB.customers.filter(c=>!q||c.name.includes(q));
 return appbar('الزباين','حسابات الزباين',`<button class="avatar" style="background:var(--blue)" onclick="openPartySheet('c')">${ic('plus',22)}</button>`)+`
@@ -590,7 +626,12 @@ DB.payments.push({id:uid(),date:new Date().toISOString(),kind,partyId:pid,partyT
 save();closeSheet();render();toast('الدفعة اتسجلت ✓');}
 /* ============ product / party sheets ============ */
 function openProductSheet(pid,fromPur){const p=pid?prod(pid):null;
+pendingPhoto=null;
 sheet(p?'تعديل صنف':'صنف جديد',`
+<div class="field"><div class="lbl">صورة الصنف (بتظهر لك هنا وللزباين في المتجر)</div>
+<div class="photo-pick" id="fp-photo-wrap" onclick="document.getElementById('fp-photo').click()">${p&&p.photo?`<img data-pid="${p.id}" alt=""><span class="ov">غيّر الصورة</span>`:`${ic('box',28)}<span>اضغط عشان تضيف صورة</span>`}</div>
+<input type="file" id="fp-photo" accept="image/*" style="display:none" onchange="pickProductPhoto(this)">
+${p&&p.photo?`<button class="cbtn" style="background:var(--red-soft);color:var(--red);width:100%;margin-top:8px" id="fp-photo-rm" onclick="event.stopPropagation();markPhotoRemove()">${ic('trash',14)} شيل الصورة</button>`:''}</div>
 <div class="field"><div class="lbl">اسم الصنف</div><input id="fp-name" value="${p?esc(p.name):''}" placeholder="زيت عباد ١٠ لتر"></div>
 <div class="field"><div class="lbl">الفئة</div><select id="fp-cat">${CATS.map(c=>`<option ${p&&p.cat===c?'selected':''}>${c}</option>`).join('')}</select></div>
 <div class="field"><div class="lbl">الوحدة</div><input id="fp-unit" value="${p?esc(p.unit):''}" placeholder="قطعة، كيلو، شيكارة…"></div>
@@ -602,14 +643,22 @@ ${fromPur?'':`<div class="field"><div class="lbl">الكمية الحالية</d
 <div class="field"><div class="lbl">نبّهني لما الكمية تقل عن</div><input id="fp-low" inputmode="decimal" value="${p?p.lowAt:'5'}"></div>
 ${fromPur?`<div class="alert" style="margin:0 0 13px"><span style="color:#9A6A14">${ic('box',18)}</span><div class="tx">الكمية اللي داخلة هتكتبها في التوريد نفسه بعد ما تضيف الصنف.</div></div>`:''}
 <button class="btn btn-p" style="width:100%" onclick="saveProduct('${pid||''}',${fromPur?'true':'false'})">${p?'حفظ التعديلات ✓':fromPur?'ضيف الصنف للتوريد ✓':'ضيف الصنف ✓'}</button>
-${p?`<button class="btn-danger" onclick="closeSheet();confirmSheet('هتمسح الصنف ده من المخزون (الفواتير القديمة هتفضل زي ما هي). متأكد؟','امسح الصنف',()=>{DB.products=DB.products.filter(x=>x.id!=='${pid}');save();render();toast('اتمسح');})">مسح الصنف</button>`:''}`);}
-function saveProduct(pid,fromPur){const name=$('#fp-name').value.trim();if(!name){toast('اكتب اسم الصنف');return;}
+${p?`<button class="btn-danger" onclick="closeSheet();confirmSheet('هتمسح الصنف ده من المخزون (الفواتير القديمة هتفضل زي ما هي). متأكد؟','امسح الصنف',()=>{DB.products=DB.products.filter(x=>x.id!=='${pid}');save();PHOTOS.del('${pid}').catch(()=>{});if(photoURLs['${pid}']){URL.revokeObjectURL(photoURLs['${pid}']);delete photoURLs['${pid}'];}render();toast('اتمسح');})">مسح الصنف</button>`:''}`);hydratePhotos();}
+async function saveProduct(pid,fromPur){const name=$('#fp-name').value.trim();if(!name){toast('اكتب اسم الصنف');return;}
 const st=$('#fp-stock');
 const data={name,cat:$('#fp-cat').value,unit:$('#fp-unit').value.trim()||'قطعة',wPrice:num($('#fp-w').value),rPrice:num($('#fp-r').value),cost:num($('#fp-cost').value),stock:st?num(st.value):0,lowAt:num($('#fp-low').value)};
-if(pid){Object.assign(prod(pid),data);save();closeSheet();render();toast('اتحفظ ✓');return;}
-const np={id:uid(),...data};DB.products.push(np);save();closeSheet();
+const ph=pendingPhoto;pendingPhoto=null;
+try{
+if(pid){const p=prod(pid);Object.assign(p,data);
+ if(ph==='REMOVE'){await PHOTOS.del(pid).catch(()=>{});p.photo=0;p.photoVer=Date.now();if(photoURLs[pid]){URL.revokeObjectURL(photoURLs[pid]);delete photoURLs[pid];}}
+ else if(ph&&ph.blob){await PHOTOS.set(pid,ph.blob);p.photo=1;p.photoVer=Date.now();photoObjUrl(pid,ph.blob);}
+ save();closeSheet();render();toast('اتحفظ ✓');return;}
+const np={id:uid(),...data};DB.products.push(np);
+if(ph&&ph.blob){await PHOTOS.set(np.id,ph.blob);np.photo=1;np.photoVer=Date.now();photoObjUrl(np.id,ph.blob);}
+save();closeSheet();
 if(fromPur&&purDraft){purDraft.items.push({productId:np.id,name:np.name,unit:np.unit,qty:1,cost:np.cost});}
-render();toast(fromPur?'الصنف اتضاف للتوريد ✓':'الصنف اتضاف ✓');}
+render();toast(fromPur?'الصنف اتضاف للتوريد ✓':'الصنف اتضاف ✓');
+}catch(e){toast('حصلت مشكلة في حفظ الصورة — البيانات اتسجلت من غيرها');save();closeSheet();render();}}
 function openPartySheet(type,pid,fromInvoice){const isC=type==='c';const x=pid?(isC?cust(pid):supp(pid)):null;
 sheet(x?('تعديل '+(isC?'زبون':'مورد')):(isC?'زبون جديد':'مورد جديد'),`
 <div class="field"><div class="lbl">الاسم</div><input id="ft-name" value="${x?esc(x.name):''}" placeholder="${isC?'مطعم الفلاح — الحاج رضوان':'شركة النور للتوريدات'}"></div>
@@ -730,6 +779,7 @@ else if(h==='#/settings'){html=vSettings();}
 else if(h==='#/orders'){html=vOrders();}
 else{html=vDash();}
 app.innerHTML=html;window.scrollTo(0,0);
+hydratePhotos();
 if((h==='#/'||h==='#')&&SB.ready()&&Date.now()-shopOrdersAt>60000){refreshOrders(true);}}
 window.addEventListener('hashchange',()=>{if(unlocked)render();});
 if(unlocked){render();}else{$('#app').innerHTML=vLock();}
