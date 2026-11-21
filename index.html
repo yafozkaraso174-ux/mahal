@@ -306,7 +306,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-21r13';
+const APP_VER='2026-11-21r14';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -761,7 +761,31 @@ if(q)list=list.filter(i=>{const c=cust(i.customerId);return String(i.num).includ
 return appbar('قايمة الفواتير','كل فواتير المحل',gearBtn())+`
 <div class="content">
 <div class="search">${ic('search',18)}<input placeholder="دوّر برقم الفاتورة أو اسم الزبون…" value="${esc(state.iq||'')}" oninput="state.iq=this.value;render()"></div>
-${list.length?list.map(i=>{const c=cust(i.customerId);return `<div class="row"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${i.num.toLocaleString(AR)} · ${c?esc(c.name):'زبون نقدي'}</div><div class="s">${relDate(i.date)} · ${i.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(i.total)} <small>ج</small></div>${i.total-i.paid>0?`<span class="badge b-amber">باقي ${fmt(i.total-i.paid)}</span>`:(i.paid>i.total?`<span class="badge b-green">رصيد +${fmt(i.paid-i.total)}</span>`:'<span class="badge b-green">خالص ✓</span>')}</div><button style="color:var(--muted);padding:6px" onclick="printInvoiceById('${i.id}')">${ic('printer',18)}</button></div>`;}).join(''):`<div class="empty"><div class="big">مفيش فواتير لسه</div>اعمل أول فاتورة من الزرار الأخضر تحت</div>`}
+${list.length?list.map(i=>{const c=cust(i.customerId);return `<div class="row" style="cursor:pointer" onclick="go('#/inv/${i.id}')"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${i.num.toLocaleString(AR)} · ${c?esc(c.name):'زبون نقدي'}</div><div class="s">${relDate(i.date)} · ${i.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(i.total)} <small>ج</small></div>${i.total-i.paid>0?`<span class="badge b-amber">باقي ${fmt(i.total-i.paid)}</span>`:(i.paid>i.total?`<span class="badge b-green">رصيد +${fmt(i.paid-i.total)}</span>`:'<span class="badge b-green">خالص ✓</span>')}</div><button style="color:var(--muted);padding:6px" onclick="event.stopPropagation();printInvoiceById('${i.id}')">${ic('printer',18)}</button></div>`;}).join(''):`<div class="empty"><div class="big">مفيش فواتير لسه</div>اعمل أول فاتورة من الزرار الأخضر تحت</div>`}
+</div>`+navbar('home');}
+function vInvoiceDetail(id){const inv=DB.invoices.find(i=>i.id===id);if(!inv)return vInvoicesList();const c=cust(inv.customerId);
+const left=Math.round((inv.total-inv.paid)*100)/100;const sub=Math.round((inv.items.reduce((s2,it)=>s2+it.qty*it.price,0)+(inv.deliveryFee||0))*100)/100;
+const trow=(k,v,red)=>`<div class="trow" style="padding:8px 2px"><span class="k">${k}</span><span style="font-weight:800${red?';color:var(--red)':''}">${v}</span></div>`;
+return `<div class="appbar"><div>${backBtn('#/invoices')}<div class="shop" style="margin-top:4px">فاتورة #${inv.num.toLocaleString(AR)}</div></div><button style="color:var(--muted)" onclick="printInvoiceById('${inv.id}')">${ic('printer')}</button></div>
+<div class="content">
+<div class="total-card">
+ <div class="trow" style="padding:8px 2px"><span class="k">الزبون</span>${c?`<button style="font-weight:800;color:var(--blue)" onclick="go('#/customers/${inv.customerId}')">${esc(c.name)}</button>`:`<span style="font-weight:800">زبون نقدي</span>`}</div>
+ ${trow('النوع',inv.priceType==='w'?'جملة':'قطاعي')}
+ ${trow('التاريخ',new Date(inv.date).toLocaleString(AR,{weekday:'long',day:'numeric',month:'long',hour:'numeric',minute:'2-digit'}))}
+</div>
+<div class="sec-title">الأصناف</div>
+<div class="total-card">${inv.items.map(it=>`<div class="trow" style="padding:8px 2px"><span style="font-weight:700">${esc(it.name)}<div style="font-weight:400;color:var(--muted);font-size:12px">${fmt(it.qty)} ${esc(it.unit)} × ${fmt(it.price)} ج</div></span><span style="font-weight:800">${fmt(it.qty*it.price)} ج</span></div>`).join('')}${inv.deliveryFee>0?trow('توصيل (دليفري)',fmt(inv.deliveryFee)+' ج'):''}</div>
+<div class="sec-title">الحساب</div>
+<div class="total-card">
+ ${(inv.discAmt>0||inv.taxAmt>0)?trow('الإجمالي',fmt(sub)+' ج'):''}
+ ${inv.discAmt>0?trow('خصم '+fmt(inv.discPct)+'٪','−'+fmt(inv.discAmt)+' ج'):''}
+ ${inv.taxAmt>0?trow('ضريبة '+fmt(inv.taxPct)+'٪','+'+fmt(inv.taxAmt)+' ج'):''}
+ ${trow('الصافي',fmt(inv.total)+' ج')}
+ ${trow('المدفوع',fmt(inv.paid)+' ج'+(inv.creditUsed>0?` (منها ${fmt(inv.creditUsed)} ج من رصيده)`:''))}
+ ${left>0?trow('الباقي عليه',fmt(left)+' ج',1):''}
+ ${left<0?trow('رصيد للزبون عند المحل',fmt(-left)+' ج'):''}
+</div>
+<button class="btn btn-p" style="width:100%;margin-top:10px" onclick="printInvoiceById('${inv.id}')">${ic('printer',18)} طباعة الفاتورة</button>
 </div>`+navbar('home');}
 function vCustDetail(id){const c=cust(id);if(!c)return vCustomers();const b=custBalance(id);
 const hist=[...DB.invoices.filter(i=>i.customerId===id).map(i=>({date:i.date,kind:'inv',obj:i})),...DB.payments.filter(p=>p.partyType==='c'&&p.partyId===id).map(p=>({date:p.date,kind:'pay',obj:p}))].sort((x,y)=>new Date(y.date)-new Date(x.date));
@@ -781,7 +805,7 @@ return `<div class="appbar"><div>${backBtn('#/customers')}<div class="shop" styl
  </div>
 </div>
 <div class="sec-title">الحركات على حسابه</div>
-${hist.length?hist.map(h=>h.kind==='inv'?`<div class="row"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${h.obj.num.toLocaleString(AR)}</div><div class="s">${relDate(h.obj.date)} · ${h.obj.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(h.obj.total)} <small>ج</small></div>${h.obj.total-h.obj.paid>0?`<span class="badge b-amber">باقي ${fmt(h.obj.total-h.obj.paid)}</span>`:(h.obj.paid>h.obj.total?`<span class="badge b-green">رصيد +${fmt(h.obj.paid-h.obj.total)}</span>`:'<span class="badge b-green">خالص ✓</span>')}</div><button style="color:var(--muted);padding:6px" onclick="printInvoiceById('${h.obj.id}')">${ic('printer',18)}</button></div>`
+${hist.length?hist.map(h=>h.kind==='inv'?`<div class="row" style="cursor:pointer" onclick="go('#/inv/${h.obj.id}')"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${h.obj.num.toLocaleString(AR)}</div><div class="s">${relDate(h.obj.date)} · ${h.obj.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(h.obj.total)} <small>ج</small></div>${h.obj.total-h.obj.paid>0?`<span class="badge b-amber">باقي ${fmt(h.obj.total-h.obj.paid)}</span>`:(h.obj.paid>h.obj.total?`<span class="badge b-green">رصيد +${fmt(h.obj.paid-h.obj.total)}</span>`:'<span class="badge b-green">خالص ✓</span>')}</div><button style="color:var(--muted);padding:6px" onclick="event.stopPropagation();printInvoiceById('${h.obj.id}')">${ic('printer',18)}</button></div>`
 :`<div class="row"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('cash')}</div><div class="mid"><div class="t">${h.obj.amount<0?'خصم من الرصيد':'دفعة'} ${h.obj.note?('· '+esc(h.obj.note)):''}</div><div class="s">${relDate(h.obj.date)}</div></div><div class="end"><div class="amt" style="color:${h.obj.amount<0?'var(--red)':'var(--green)'}">${h.obj.amount<0?'−':'+'}${fmt(Math.abs(h.obj.amount))} <small>ج</small></div></div></div>`).join(''):`<div class="empty">لسه مفيش حركات على حسابه</div>`}
 <button class="btn-danger" onclick="confirmSheet('هتمسح الزبون ده وفواتيره هتفضل محفوظة من غير اسمه. متأكد؟','امسح الزبون',()=>{DB.customers=DB.customers.filter(x=>x.id!=='${id}');save();go('#/customers');toast('اتمسح');})">مسح الزبون</button>
 </div>`+navbar('users');}
@@ -1137,6 +1161,7 @@ else if(h.startsWith('#/customers/')){html=can('customers')?vCustDetail(h.split(
 else if(h==='#/suppliers'){html=can('suppliers')?vSuppliers():vNoPerm();}
 else if(h.startsWith('#/suppliers/')){html=can('suppliers')?vSuppDetail(h.split('/')[2]):vNoPerm();}
 else if(h==='#/invoices'){html=can('invoice')?vInvoicesList():vNoPerm();}
+else if(h.startsWith('#/inv/')){html=can('invoice')?vInvoiceDetail(h.split('/')[2]):vNoPerm();}
 else if(h==='#/invoice'){html=can('invoice')?vInvoice(null):vNoPerm();}
 else if(h.startsWith('#/invoice/')){html=can('invoice')?vInvoice(h.split('/')[2]):vNoPerm();}
 else if(h==='#/purchase'){html=can('suppliers')?vPurchase(null):vNoPerm();}
