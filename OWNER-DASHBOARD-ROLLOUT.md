@@ -1,7 +1,7 @@
 # Combined rollout, local release candidate
 
 ## Approved scope
-Owner shops/subscriptions dashboard, mobile receivables, email-bound self-signup invitation. The original invoice screen, oils data and existing free origins stay unchanged. No photo-upload-order bug work. No automatic invitations/messages. Pending shops cannot use the service. The recipient chooses their password. Subscription begins at acceptance. Invitation lasts 48 hours, is single-use, revocable and bound to shop/email.
+Owner shops/subscriptions dashboard, mobile receivables, email-bound self-signup invitation. The original invoice screen, oils data and existing free origins stay unchanged. No photo-upload-order bug work. No automatic invitations/messages. Pending shops cannot use the service. The recipient chooses their password. Subscription begins at acceptance. Invitation lasts one hour, is single-use, revocable and bound to shop/email.
 
 ## Local evidence
 - Owner SQL 35 and UI 23 checks.

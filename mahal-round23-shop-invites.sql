@@ -20,12 +20,12 @@ begin
   if nm is null or length(nm)<1 or length(nm)>160 or em is null or em!~'^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' or length(em)>320 or m is null or m not in(1,3,6,12) or a is null or a<0 or a>1000000000 or a<>round(a,2) or coalesce(p->>'shopType','') not in('general','mobile') then raise exception 'invalid invitation';end if;
   if exists(select 1 from auth.users u join shop_users s on s.auth_id=u.id where lower(u.email)=em) then raise exception 'account already assigned';end if;
   insert into tenants(name,owner_name,phone,shop_type,status,sub_start,sub_end,monthly_price,onboarding_state) values(nm,left(coalesce(p->>'owner',''),160),left(coalesce(p->>'phone',''),40),p->>'shopType','suspended',null,null,a,'invited') returning id into tid;
-  insert into shop_invites(id,tenant_id,email,token_hash,months,expires_at,created_by) values(op,tid,em,h,m,now()+interval '48 hours',auth.uid()) returning * into iv;
+  insert into shop_invites(id,tenant_id,email,token_hash,months,expires_at,created_by) values(op,tid,em,h,m,now()+interval '1 hour',auth.uid()) returning * into iv;
  elsif k in('reissue','revoke') then
   tid:=(p->>'tenantId')::uuid;perform 1 from tenants where id=tid and onboarding_state='invited' for update;if not found then raise exception 'shop already activated or missing';end if;
   select * into iv from shop_invites where tenant_id=tid order by created_at desc limit 1 for update;if not found then raise exception 'invite missing';end if;
   update shop_invites set revoked_at=coalesce(revoked_at,now()) where tenant_id=tid and accepted_at is null and revoked_at is null;
-  if k='reissue' then insert into shop_invites(id,tenant_id,email,token_hash,months,expires_at,created_by) values(op,tid,iv.email,h,iv.months,now()+interval '48 hours',auth.uid()) returning * into iv;end if;
+  if k='reissue' then insert into shop_invites(id,tenant_id,email,token_hash,months,expires_at,created_by) values(op,tid,iv.email,h,iv.months,now()+interval '1 hour',auth.uid()) returning * into iv;end if;
  else raise exception 'unknown action';end if;
  r:=jsonb_build_object('tenantId',tid,'expiresAt',iv.expires_at,'email',iv.email,'revoked',k='revoke');
  -- Never persist the bearer token, including in the operation journal.
