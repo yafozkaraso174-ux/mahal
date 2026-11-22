@@ -534,11 +534,11 @@ let curUser=null;
 function savedUserGet(){try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||localStorage.getItem('mahal_cur_ls')||'null');const a=authGet();return cu&&cu.authId&&a&&a.uid===cu.authId?cu:null;}catch(e){return null;}}
 try{const cu=savedUserGet();if(cu)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r41';
+const APP_VER='2026-11-22r42';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
-return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>${esc(DB.settings.shopName)}</h2><p>سجّل دخولك بالإيميل والباسورد — من أي جهاز</p>
+return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>محلي — إدارة المحلات</h2><p>سجّل دخولك لفتح محلك بالإيميل والباسورد</p>
 <div class="field" style="text-align:right"><div class="lbl">الإيميل</div><input id="li-email" type="email" value="${esc(em)}" autocomplete="username" style="direction:ltr;text-align:left" placeholder="name@email.com"></div>
 <div class="field" style="text-align:right"><div class="lbl">الباسورد</div><input id="li-pass" type="password" autocomplete="current-password" style="direction:ltr;text-align:left" placeholder="••••••" onkeydown="if(event.key==='Enter')doEmailLogin()"></div>
 <button class="btn btn-p" style="width:100%;margin-top:6px" onclick="doEmailLogin()">دخول</button></div></div>`;}
