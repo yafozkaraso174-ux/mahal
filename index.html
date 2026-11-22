@@ -297,8 +297,104 @@ const SYNC_KEY='mahal_sync_v1',DIRTY_KEY='mahal_db_changed_at';
 let backupTimer=null,applyingRemote=false,syncBusy=false,lastSyncTick=0;
 function markDirty(){if(applyingRemote)return;localStorage.setItem(DIRTY_KEY,new Date().toISOString());}
 function save(){localStorage.setItem(KEY,JSON.stringify(DB));markDirty();try{scheduleCloudBackup();}catch(e){}}
-function logMove(pid,kind,qty,before,after,ref){DB.movements.push({id:uid(),pid,kind,qty,before,after,ref:ref||'',date:new Date().toISOString()});}
-save();
+function logMove(pid,kind,qty,before,after,ref,mid){DB.movements.push({id:mid||uid(),pid,kind,qty,before,after,ref:ref||'',date:new Date().toISOString()});}
+/* ============ مزامنة الجداول: شغل كل الأجهزة بيتشارك لايف ============ */
+const OUTBOX_KEY='mahal_outbox_v1',SYNC2_KEY='mahal_sync2_v1';
+const ENT={
+ products:{table:'products',ts:'updated_at',perms:null,
+  map:p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,wprice:p.wPrice,cost:p.cost,stock:p.stock,lowat:p.lowAt||0,deleted:!!p.deleted,photo_url:p.photo?SB.photoUrlFor(p):null,updated_at:new Date().toISOString()}),
+  unmap:(r,old)=>({id:r.id,name:r.name,cat:r.cat,unit:r.unit,rPrice:num(r.price),wPrice:num(r.wprice),cost:num(r.cost),stock:num(r.stock),lowAt:num(r.lowat),deleted:!!r.deleted,photo:old&&old.photo,photoVer:old&&old.photoVer})},
+ customers:{table:'customers',ts:'updated_at',perms:null,
+  map:c=>({id:c.id,name:c.name,phone:c.phone||'',type:c.type||'r',deleted:!!c.deleted,updated_at:new Date().toISOString()}),
+  unmap:r=>({id:r.id,name:r.name,phone:r.phone||'',type:r.type||'r',deleted:!!r.deleted})},
+ suppliers:{table:'suppliers',ts:'updated_at',perms:null,
+  map:s=>({id:s.id,name:s.name,phone:s.phone||'',deleted:!!s.deleted,updated_at:new Date().toISOString()}),
+  unmap:r=>({id:r.id,name:r.name,phone:r.phone||'',deleted:!!r.deleted})},
+ invoices:{table:'invoices',ts:'updated_at',perms:['invoice','stats'],
+  map:i=>({id:i.id,num:i.num,date:i.date,customer_id:i.customerId,price_type:i.priceType,items:i.items,disc_pct:i.discPct||0,tax_pct:i.taxPct||0,disc_amt:i.discAmt||0,tax_amt:i.taxAmt||0,delivery_fee:i.deliveryFee||0,total:i.total,paid:i.paid,credit_used:i.creditUsed||0,updated_at:new Date().toISOString()}),
+  unmap:r=>({id:r.id,num:r.num,date:r.date,customerId:r.customer_id,priceType:r.price_type,items:r.items||[],discPct:num(r.disc_pct),taxPct:num(r.tax_pct),discAmt:num(r.disc_amt),taxAmt:num(r.tax_amt),deliveryFee:num(r.delivery_fee),total:num(r.total),paid:num(r.paid),creditUsed:num(r.credit_used)})},
+ purchases:{table:'purchases',ts:'updated_at',perms:['suppliers','stats'],
+  map:p=>({id:p.id,date:p.date,supplier_id:p.supplierId,items:p.items,total:p.total,paid:p.paid,updated_at:new Date().toISOString()}),
+  unmap:r=>({id:r.id,date:r.date,supplierId:r.supplier_id,items:r.items||[],total:num(r.total),paid:num(r.paid)})},
+ payments:{table:'payments',ts:'inserted_at',perms:['invoice','customers','suppliers','stats'],
+  map:p=>({id:p.id,date:p.date,kind:p.kind,party_type:p.partyType,party_id:p.partyId,amount:p.amount,note:p.note||''}),
+  unmap:r=>({id:r.id,date:r.date,kind:r.kind,partyType:r.party_type,partyId:r.party_id,amount:num(r.amount),note:r.note||''})},
+ movements:{table:'movements',ts:'inserted_at',perms:null,
+  map:m=>({id:m.id,pid:m.pid,kind:m.kind,qty:m.qty,qty_before:m.before,qty_after:m.after,ref:m.ref||'',date:m.date}),
+  unmap:r=>({id:r.id,pid:r.pid,kind:r.kind,qty:num(r.qty),before:num(r.qty_before),after:num(r.qty_after),ref:r.ref||'',date:r.date})}
+};
+const ENT_ORDER=['products','customers','suppliers','invoices','purchases','payments','movements'];
+function sync2Get(){try{return JSON.parse(localStorage.getItem(SYNC2_KEY)||'{}');}catch(e){return{};}}
+function sync2Set(s){localStorage.setItem(SYNC2_KEY,JSON.stringify(s));}
+function outboxGet(){try{return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]');}catch(e){return[];}}
+function outboxSet(o){localStorage.setItem(OUTBOX_KEY,JSON.stringify(o));}
+function outboxPending(){return outboxGet().length;}
+function enqueue(op){const o=outboxGet();op.qid=uid();op.at=new Date().toISOString();o.push(op);outboxSet(o);flushOutbox().catch(()=>{});}
+function outboxHas(table,id){return outboxGet().some(x=>x.table===table&&x.rowId===id&&!x.failed);}
+let flushBusy=false;
+async function flushOutbox(){if(flushBusy||!navigator.onLine||!SB.ready()||!authGet()||!curUser)return;
+ flushBusy=true;
+ try{await SB.ensureSession();let o=outboxGet();
+  for(const op of o){if(op.failed)continue;
+   try{await applyOp(op);o=outboxGet().filter(x=>x.qid!==op.qid);outboxSet(o);}
+   catch(e){const m=(e&&e.message)||String(e);
+    if(m.indexOf('shortage:')===0||m.indexOf('no permission')===0||m.indexOf('missing')>-1){const o2=outboxGet();const f=o2.find(x=>x.qid===op.qid);if(f){f.failed=m;outboxSet(o2);}toast('عملية اتوقفت: '+m);}
+    else break;}}
+ }catch(e){}
+ flushBusy=false;updateOutboxBadge();}
+async function applyOp(op){
+ if(op.type==='invoice'){const r=await rpc('save_invoice',{p:op.payload});
+  if(r&&r.num){const inv=DB.invoices.find(i=>i.id===op.payload.id);if(inv&&inv.num!==r.num){inv.num=r.num;save();}}
+  return;}
+ if(op.type==='purchase'){await rpc('save_purchase',{p:op.payload});return;}
+ if(op.type==='payment'){await rpc('record_payment',{p:op.payload});return;}
+ if(op.type==='upsert'){await SB.req(op.table,{method:'POST',headers:{'Content-Type':'application/json','Prefer':(op.prefer||'resolution=merge-duplicates')},body:JSON.stringify([op.row])});
+  if(op.table==='products'){const lp=DB.products.find(x=>x.id===op.rowId);if(lp&&lp.photo&&lp.photoVer){const ups=JSON.parse(localStorage.getItem('mahal_photo_up')||'{}');if(ups[lp.id]!==lp.photoVer){const blob=await PHOTOS.get(lp.id);if(blob){await SB.uploadPhoto(lp.id,blob);ups[lp.id]=lp.photoVer;localStorage.setItem('mahal_photo_up',JSON.stringify(ups));}}}}
+  return;}
+ if(op.type==='softdel'){await SB.req(op.table+'?id=eq.'+encodeURIComponent(op.rowId),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({deleted:true})});return;}
+ if(op.type==='harddel'){await SB.req(op.table+'?id=eq.'+encodeURIComponent(op.rowId),{method:'DELETE',headers:{'Prefer':'return=minimal'}});return;}
+}
+async function rpc(name,body){await SB.ensureSession();SB.load();
+ const base=(SB.cfg.url||SB_DEF.url).replace(/\/$/,''),anon=SB.cfg.anon||SB_DEF.anon;
+ const r=await fetch(base+'/rest/v1/rpc/'+name,{method:'POST',headers:{'apikey':anon,'Authorization':'Bearer '+(SB.token||anon),'Content-Type':'application/json'},body:JSON.stringify(body)});
+ if(!r.ok){let m='rpc-failed:'+r.status;try{const j=await r.json();if(j&&j.message)m=j.message;}catch(e){}
+  throw new Error(m);}
+ const t=await r.text();return t?JSON.parse(t):null;}
+async function pullDelta(full){if(!SB.ready()||!authGet()||!curUser)return;
+ await SB.ensureSession();const s2=sync2Get();let changed=false;
+ for(const key of ENT_ORDER){const e=ENT[key];
+  if(e.perms&&!curUser.owner&&!e.perms.some(p=>can(p)))continue;
+  let since=full?'1970-01-01T00:00:00Z':(s2[key]||'1970-01-01T00:00:00Z');let maxTs=since;
+  for(let page=0;page<20;page++){
+   const rows=await SB.req(e.table+'?'+e.ts+'=gt.'+encodeURIComponent(since)+'&order='+e.ts+'.asc&limit=1000');
+   if(!rows||!rows.length)break;
+   for(const r of rows){if(outboxHas(e.table,r.id))continue;
+    const arr=DB[key];const ix=arr.findIndex(x=>x.id===r.id);
+    if(r.deleted){if(ix>=0){arr.splice(ix,1);changed=true;}}
+    else{const loc=e.unmap(r,ix>=0?arr[ix]:null);if(ix>=0)arr[ix]=loc;else arr.push(loc);changed=true;}
+    const t=r[e.ts];if(t&&t>maxTs)maxTs=t;}
+   if(rows.length<1000)break;since=maxTs;}
+  s2[key]=maxTs;}
+ sync2Set(s2);if(changed){applyingRemote=true;localStorage.setItem(KEY,JSON.stringify(DB));applyingRemote=false;}
+ return changed;}
+function updateOutboxBadge(){const n=outboxPending();const el=document.getElementById('outbox-badge');if(el)el.style.display=n>0?'':'none';if(el&&n>0)el.textContent=n.toLocaleString(AR);}
+async function migrateToTables(){if(!curUser||!curUser.owner||DB.settings.migratedV2||!navigator.onLine||!SB.ready())return;
+ try{await SB.ensureSession();
+  const chunk=(a,n)=>{const o=[];for(let i=0;i<a.length;i+=n)o.push(a.slice(i,i+n));return o;};
+  const up=async(table,rows,prefer)=>{for(const c of chunk(rows,200)){if(c.length)await SB.req(table,{method:'POST',headers:{'Content-Type':'application/json','Prefer':prefer},body:JSON.stringify(c)});}};
+  await up('products',DB.products.map(ENT.products.map),'resolution=merge-duplicates');
+  await up('customers',DB.customers.map(ENT.customers.map),'resolution=merge-duplicates');
+  await up('suppliers',DB.suppliers.map(ENT.suppliers.map),'resolution=merge-duplicates');
+  await up('invoices',DB.invoices.map(ENT.invoices.map),'resolution=merge-duplicates');
+  await up('purchases',DB.purchases.map(ENT.purchases.map),'resolution=merge-duplicates');
+  await up('payments',DB.payments.map(ENT.payments.map),'resolution=ignore-duplicates');
+  await up('movements',DB.movements.map(ENT.movements.map),'resolution=ignore-duplicates');
+  const maxNum=DB.invoices.reduce((m,i)=>Math.max(m,i.num||0),1000);
+  await rpc('set_invoice_counter',{v:maxNum});
+  DB.settings.migratedV2=true;save();await pushCloudBackup(true);
+  const s2=sync2Get();const now=new Date().toISOString();ENT_ORDER.forEach(k=>{if(!s2[k])s2[k]=now;});sync2Set(s2);
+  toast('بيانات المحل اتزامنت على السحابة ✓');
+ }catch(e){const s=syncGet();s.lastErr='ترحيل فشل: '+((e&&e.message)||e);syncSet(s);}}
 /* ============ المستخدمين والقفل (حسابات) ============ */
 const AUTH_KEY='mahal_auth';
 function authGet(){try{return JSON.parse(localStorage.getItem(AUTH_KEY)||'null');}catch(e){return null;}}
@@ -306,7 +402,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r18';
+const APP_VER='2026-11-22r19';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -380,10 +476,10 @@ if(st!==200){const msg=(j.msg||j.error_description||j.error||'').toLowerCase();c
   :(code.includes('signup_disabled')||msg.includes('signups not allowed'))?'إنشاء الحسابات مقفول من سوبابيز — من Supabase افتح Authentication ← Providers ← Email وشغّل "Allow new users to sign up"'
   :(code.includes('weak_password')||msg.includes('password'))?'الباسورد ضعيف — خليه ٦ حروف أو أرقام على الأقل'
   :(st===429||code.includes('rate_limit'))?'محاولات كتير — استنى دقيقة وجرب تاني'
-  :'مشكلة في إنشاء الحساب — جرب تاني';
+  :('مشكلة في إنشاء الحساب: '+(j.msg||j.error_description||j.error||('HTTP '+st)));
  toast(why);return;}
 const newUid=j.id||(j.user&&j.user.id);
-if(!newUid){toast('مشكلة في إنشاء الحساب — جرب تاني');return;}
+if(!newUid){toast('الحساب اتسجل بس محتاج تأكيد إيميل — كلّم الدعم');return;}
 try{await SB.ensureSession();
  await SB.req('shop_users',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify([{id:uid(),name,auth_id:newUid,owner:false,active:true,perms,updated_at:new Date().toISOString()}])});
 }catch(e){toast('الحساب اتسجل بس الربط فشل — جرب تضيفه تاني');return;}
@@ -481,22 +577,18 @@ async req(path,opt){opt=opt||{};this.load();const anon=this.cfg.anon||SB_DEF.ano
  const h=Object.assign({'apikey':anon,'Authorization':'Bearer '+(this.token||anon)},opt.headers||{});
  const r=await fetch(base+'/rest/v1/'+path,Object.assign({},opt,{headers:h}));
  if(!r.ok)throw new Error('req-failed:'+r.status);if(r.status===204)return null;const t=await r.text();return t?JSON.parse(t):null;},
-photoUrlFor(p){return this.cfg.url.replace(/\/$/,'')+'/storage/v1/object/public/product-photos/'+encodeURIComponent(p.id)+'.jpg?v='+(p.photoVer||1);},
+photoUrlFor(p){return (this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/storage/v1/object/public/product-photos/'+encodeURIComponent(p.id)+'.jpg?v='+(p.photoVer||1);},
 async uploadPhoto(id,blob){const r=await fetch(this.cfg.url.replace(/\/$/,'')+'/storage/v1/object/product-photos/'+encodeURIComponent(id)+'.jpg',{method:'POST',headers:{'apikey':this.cfg.anon,'Authorization':'Bearer '+this.token,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
  if(!r.ok)throw new Error('photo-upload-failed:'+r.status);},
 async pushProducts(){await this.ensureSession();
  const ups=JSON.parse(localStorage.getItem('mahal_photo_up')||'{}');
  for(const p of DB.products){if(p.photo&&p.photoVer&&ups[p.id]!==p.photoVer){const blob=await PHOTOS.get(p.id);if(blob){await this.uploadPhoto(p.id,blob);ups[p.id]=p.photoVer;}}}
  localStorage.setItem('mahal_photo_up',JSON.stringify(ups));
- const rows=DB.products.map(p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,stock:p.stock,photo_url:p.photo?this.photoUrlFor(p):null,updated_at:new Date().toISOString()}));
- await this.req('products',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(rows)});
  if(typeof can==='function'&&can('settings')){
  const info=[{id:1,shop_name:DB.settings.shopName,owner_name:DB.settings.ownerName||'',phone:DB.settings.phone||'',payment:DB.settings.pay||{cash:{on:true}},delivery_fee:DB.settings.deliveryFee||0,zones:DB.settings.zones||[],delivery_on:DB.settings.deliveryOn!==false,updated_at:new Date().toISOString()}];
  try{await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}
  catch(e){delete info[0].payment;delete info[0].delivery_fee;delete info[0].zones;delete info[0].delivery_on;await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}}
- const liveIds=DB.products.map(p=>p.id);
- if(liveIds.length){await this.req('products?id=not.in.('+liveIds.map(encodeURIComponent).join(',')+')',{method:'DELETE'});}
- return rows.length;},
+ return DB.products.length;},
 async fetchOrders(){await this.ensureSession();return await this.req('orders?order=created_at.desc&limit=100');},
 async setOrderStatus(id,st){await this.ensureSession();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({status:st})});},
 async deleteOrder(id){await this.ensureSession();await this.req('orders?id=eq.'+encodeURIComponent(id),{method:'DELETE'});},
@@ -523,22 +615,22 @@ function syncDiagHTML(){const s=syncGet();const a=authGet();const dirty=!!localS
  return `<div class="total-card" style="margin-top:6px">
  ${row('نسخة التطبيق',APP_VER)}
  ${row('الحساب',a&&a.email?esc(a.email):'مفيش — سجّل دخولك')}
- ${row('الصلاحية',curUser?(curUser.owner?'صاحب المحل 👑':'موظف — المزامنة للمالك بس'):'—')}
+ ${row('الصلاحية',curUser?(curUser.owner?'صاحب المحل 👑':'موظف — شغلك بيتزامن مع المالك'):'—')}
  ${row('آخر رفع ناجح',s.lastPush?relDate(s.lastPush):(localStorage.getItem('mahal_last_backup')?relDate(localStorage.getItem('mahal_last_backup')):'لسه'))}
  ${row('آخر سحب',s.lastPull?relDate(s.lastPull):'لسه')}
- ${row('تغييرات مستنية تترفع',dirty?'آه — هتترفع خلال ثوانٍ':'لأ ✓')}
+ ${row('عمليات مستنية تتزامن',outboxPending()>0?outboxPending().toLocaleString(AR)+' — هتتحاول تاني تلقائي':'لأ ✓')}
  ${s.lastErr?row('آخر خطأ','<span style="color:var(--red)">'+esc(s.lastErr)+'</span>'):''}
  <div style="display:flex;gap:6px;margin-top:6px">
  <button class="cbtn" style="flex:1;background:var(--green);color:#fff" onclick="doSyncNow()">زامن دلوقتي 🔄</button>
  <button class="cbtn" style="flex:1;background:var(--blue);color:#fff" onclick="doForceUpdate()">تحديث النسخة ⬆️</button>
  </div></div>`;}
 async function doSyncNow(){if(!SB.ready()||!authGet()){toast('سجّل دخولك الأول');return;}
- if(!curUser||!curUser.owner){toast('المزامنة شغالة على حساب صاحب المحل بس');return;}
+ if(!curUser){toast('سجّل دخولك الأول');return;}
  toast('بزامن…');
- try{if(localStorage.getItem(DIRTY_KEY))await pushCloudBackup();
-  await syncTick();
-  const s=syncGet();
-  toast(s.lastErr?('في مشكلة: '+s.lastErr):'تمت المزامنة ✓');
+ try{if(curUser.owner&&localStorage.getItem(DIRTY_KEY))await pushCloudBackup();
+  await migrateToTables();await flushOutbox();const ch=await pullDelta(false);
+  const s=syncGet();const n=outboxPending();
+  toast(s.lastErr?('في مشكلة: '+s.lastErr):(n>0?('لسه '+n.toLocaleString(AR)+' عملية مستنية — هتتحاول تاني'):'تمت المزامنة ✓'));
  }catch(e){toast('في مشكلة في الاتصال — جرب تاني');}
  render();}
 async function doForceUpdate(){if(!('serviceWorker' in navigator)){toast('المتصفح ده مش بيدعم التحديث التلقائي');return;}
@@ -551,30 +643,27 @@ async function doForceUpdate(){if(!('serviceWorker' in navigator)){toast('الم
 function applyRemoteDB(d){if(!d.drafts)d.drafts=[];if(!d.nextNum)d.nextNum=1001;if(!Array.isArray(d.users))d.users=[];if(!Array.isArray(d.movements))d.movements=[];
  applyingRemote=true;DB=d;localStorage.setItem(KEY,JSON.stringify(DB));applyingRemote=false;}
 async function syncTick(){lastSyncTick=Date.now();
- if(!SB.ready()||!authGet()||!curUser||!curUser.owner||syncBusy)return;
+ if(!SB.ready()||!authGet()||!curUser||syncBusy)return;
  if(document.querySelector('#overlay-root .overlay'))return;
  syncBusy=true;
  try{await SB.ensureSession();
-  const rows=await SB.req('backups?id=eq.1&select=updated_at');
-  const rem=rows&&rows[0];const s=syncGet();const dirtyAt=localStorage.getItem(DIRTY_KEY);
-  const remTs=Date.parse(rem&&rem.updated_at)||0;
-  if(!s.decided){
-   if(remTs>0){
-    if(!dirtyAt){const full0=await SB.req('backups?id=eq.1&select=data,updated_at');const b0=full0&&full0[0];
-     if(b0&&b0.data&&b0.data.products){applyRemoteDB(b0.data);const s9=syncGet();s9.decided=true;s9.lastPull=b0.updated_at;s9.lastPush=b0.updated_at;syncSet(s9);render();toast('اتحمّلت بيانات المحل على الجهاز ده ✓');}
-     syncBusy=false;return;}
-    syncBusy=false;showSyncChoice(rem.updated_at);return;}
-   s.decided=true;syncSet(s);syncBusy=false;return;}
-  if(dirtyAt){
-   const lastSync=Math.max(Date.parse(s.lastPull||0)||0,Date.parse(s.lastPush||0)||0);
-   if(remTs>lastSync){syncBusy=false;showSyncChoice(rem.updated_at);return;}
-   await pushCloudBackup();syncBusy=false;return;}
-  if(remTs>Math.max(Date.parse(s.lastPull||0)||0,Date.parse(s.lastPush||0)||0)){
-   const full=await SB.req('backups?id=eq.1&select=data,updated_at');const b=full&&full[0];
-   if(b&&b.data&&b.data.products){applyRemoteDB(b.data);
-    const s2=syncGet();s2.lastPull=b.updated_at;syncSet(s2);
-    render();toast('البيانات اتحدّثت من جهازك التاني ✓');}}
- }catch(e){try{const s3=syncGet();s3.lastErr='سحب فشل: '+((e&&e.message)||e);syncSet(s3);}catch(_){}}
+  if(curUser.owner){
+   const s=syncGet();
+   if(!s.decided){
+    const rows=await SB.req('backups?id=eq.1&select=updated_at');
+    const rem=rows&&rows[0];const remTs=Date.parse(rem&&rem.updated_at)||0;const dirtyAt=localStorage.getItem(DIRTY_KEY);
+    if(remTs>0){
+     if(!dirtyAt){const full0=await SB.req('backups?id=eq.1&select=data,updated_at');const b0=full0&&full0[0];
+      if(b0&&b0.data&&b0.data.products){applyRemoteDB(b0.data);const s9=syncGet();s9.decided=true;s9.lastPull=b0.updated_at;s9.lastPush=b0.updated_at;syncSet(s9);render();toast('اتحمّلت بيانات المحل على الجهاز ده ✓');}
+      await migrateToTables();await flushOutbox();const c0=await pullDelta(false);if(c0)render();syncBusy=false;return;}
+     syncBusy=false;showSyncChoice(rem.updated_at);return;}
+    s.decided=true;syncSet(s);}
+   if(localStorage.getItem(DIRTY_KEY))await pushCloudBackup();}
+  await migrateToTables();
+  await flushOutbox();
+  const changed=await pullDelta(false);
+  if(changed)render();
+ }catch(e){try{const s3=syncGet();s3.lastErr='مزامنة فشلت: '+((e&&e.message)||e);syncSet(s3);}catch(_){}}
  syncBusy=false;}
 function showSyncChoice(remDate){sheet('مزامنة الأجهزة',`
 <p style="font-size:13.5px;font-weight:700;line-height:1.9;text-align:center">في نسخة من بيانات المحل على السحابة (آخر تحديث ${relDate(remDate)}).<br>الجهاز ده ياخد بياناته منين؟</p>
@@ -644,15 +733,17 @@ for(const it of items){if(it._p&&it.qty>it._p.stock){toast(`الكمية من "$
 const ph=String(o.phone||'').replace(/\D/g,'');
 let c=ph?DB.customers.find(x=>String(x.phone||'').replace(/\D/g,'')===ph):null;
 if(!c)c=DB.customers.find(x=>x.name.trim()===String(o.customer_name||'').trim());
-if(!c){c={id:uid(),name:String(o.customer_name||'زبون متجر').trim(),phone:String(o.phone||''),type:'r'};DB.customers.push(c);}
+if(!c){c={id:uid(),name:String(o.customer_name||'زبون متجر').trim(),phone:String(o.phone||''),type:'r'};DB.customers.push(c);var isNewCust=true;}
 try{await SB.setOrderStatus(id,'done');}catch(e){toast('في مشكلة في الاتصال — جرب تاني');return;}
-const invItems=items.map(it=>({productId:it.productId,name:it.name,unit:it.unit,qty:it.qty,price:it.price,cost:it.cost}));
+const invItems=items.map(it=>({productId:it.productId,name:it.name,unit:it.unit,qty:it.qty,price:it.price,cost:it.cost,moveId:uid(),moveKind:'order'}));
 const fee=Math.max(0,+o.delivery_fee||0);
 const total=Math.round((invItems.reduce((t,it)=>t+it.qty*it.price,0)+fee)*100)/100;
 const paid=num($('#co-paid')?.value);
 const inv={id:uid(),num:DB.nextNum++,date:new Date().toISOString(),customerId:c.id,priceType:'r',items:invItems,total,paid,deliveryFee:fee};
-invItems.forEach(it=>{const p=prod(it.productId);if(p){const b=p.stock;p.stock=Math.round((p.stock-it.qty)*100)/100;logMove(p.id,'order',-it.qty,b,p.stock,'فاتورة #'+inv.num);}});
+invItems.forEach(it=>{const p=prod(it.productId);if(p){const b=p.stock;p.stock=Math.round((p.stock-it.qty)*100)/100;logMove(p.id,'order',-it.qty,b,p.stock,'فاتورة #'+inv.num,it.moveId);}});
 DB.invoices.push(inv);save();
+if(typeof isNewCust!=='undefined'&&isNewCust)enqueue({type:'upsert',table:'customers',rowId:c.id,row:ENT.customers.map(c)});
+enqueue({type:'invoice',table:'invoices',rowId:inv.id,payload:Object.assign({},inv,{creditPaymentId:null})});
 o.status='done';closeSheet();
 toast('اتحولت لفاتورة #'+inv.num.toLocaleString(AR)+' ✓'+(paid>total?(' — '+fmt(Math.round((paid-total)*100)/100)+' ج زيادة رصيد للزبون'):''));
 go('#/customers/'+c.id);}
@@ -818,7 +909,7 @@ return `<div class="appbar"><div>${backBtn('#/customers')}<div class="shop" styl
 <div class="sec-title">الحركات على حسابه</div>
 ${hist.length?hist.map(h=>h.kind==='inv'?`<div class="row" style="cursor:pointer" onclick="go('#/inv/${h.obj.id}')"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('receipt')}</div><div class="mid"><div class="t">فاتورة #${h.obj.num.toLocaleString(AR)}</div><div class="s">${relDate(h.obj.date)} · ${h.obj.items.length.toLocaleString(AR)} أصناف</div></div><div class="end"><div class="amt">${fmt(h.obj.total)} <small>ج</small></div>${h.obj.total-h.obj.paid>0?`<span class="badge b-amber">باقي ${fmt(h.obj.total-h.obj.paid)}</span>`:(h.obj.paid>h.obj.total?`<span class="badge b-green">رصيد +${fmt(h.obj.paid-h.obj.total)}</span>`:'<span class="badge b-green">خالص ✓</span>')}</div><button style="color:var(--muted);padding:6px" onclick="event.stopPropagation();printInvoiceById('${h.obj.id}')">${ic('printer',18)}</button></div>`
 :`<div class="row"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('cash')}</div><div class="mid"><div class="t">${h.obj.amount<0?'خصم من الرصيد':'دفعة'} ${h.obj.note?('· '+esc(h.obj.note)):''}</div><div class="s">${relDate(h.obj.date)}</div></div><div class="end"><div class="amt" style="color:${h.obj.amount<0?'var(--red)':'var(--green)'}">${h.obj.amount<0?'−':'+'}${fmt(Math.abs(h.obj.amount))} <small>ج</small></div></div></div>`).join(''):`<div class="empty">لسه مفيش حركات على حسابه</div>`}
-<button class="btn-danger" onclick="confirmSheet('هتمسح الزبون ده وفواتيره هتفضل محفوظة من غير اسمه. متأكد؟','امسح الزبون',()=>{DB.customers=DB.customers.filter(x=>x.id!=='${id}');save();go('#/customers');toast('اتمسح');})">مسح الزبون</button>
+<button class="btn-danger" onclick="confirmSheet('هتمسح الزبون ده وفواتيره هتفضل محفوظة من غير اسمه. متأكد؟','امسح الزبون',()=>{DB.customers=DB.customers.filter(x=>x.id!=='${id}');save();enqueue({type:'softdel',table:'customers',rowId:'${id}'});go('#/customers');toast('اتمسح');})">مسح الزبون</button>
 </div>`+navbar('users');}
 function vSuppDetail(id){const s=supp(id);if(!s)return vSuppliers();const b=suppBalance(id);
 const hist=[...DB.purchases.filter(i=>i.supplierId===id).map(i=>({date:i.date,kind:'pur',obj:i})),...DB.payments.filter(p=>p.partyType==='s'&&p.partyId===id).map(p=>({date:p.date,kind:'pay',obj:p}))].sort((x,y)=>new Date(y.date)-new Date(x.date));
@@ -837,7 +928,7 @@ return `<div class="appbar"><div>${backBtn('#/suppliers')}<div class="shop" styl
 <div class="sec-title">الحركات على حسابه</div>
 ${hist.length?hist.map(h=>h.kind==='pur'?`<div class="row"><div class="ic" style="background:var(--amber-soft);color:#9A6A14">${ic('truck')}</div><div class="mid"><div class="t">توريد ${h.obj.items.map(it=>esc(it.name)).join('، ')}</div><div class="s">${relDate(h.obj.date)}</div></div><div class="end"><div class="amt">${fmt(h.obj.total)} <small>ج</small></div>${h.obj.total-h.obj.paid>0?`<span class="badge b-red">باقي ${fmt(h.obj.total-h.obj.paid)}</span>`:'<span class="badge b-green">خالص ✓</span>'}</div></div>`
 :`<div class="row"><div class="ic" style="background:var(--red-soft);color:var(--red)">${ic('cash')}</div><div class="mid"><div class="t">دفعة له ${h.obj.note?('· '+esc(h.obj.note)):''}</div><div class="s">${relDate(h.obj.date)}</div></div><div class="end"><div class="amt" style="color:var(--red)">−${fmt(h.obj.amount)} <small>ج</small></div></div></div>`).join(''):`<div class="empty">لسه مفيش حركات على حسابه</div>`}
-<button class="btn-danger" onclick="confirmSheet('هتمسح المورد ده وتوريداته هتفضل محفوظة من غير اسمه. متأكد؟','امسح المورد',()=>{DB.suppliers=DB.suppliers.filter(x=>x.id!=='${id}');save();go('#/suppliers');toast('اتمسح');})">مسح المورد</button>
+<button class="btn-danger" onclick="confirmSheet('هتمسح المورد ده وتوريداته هتفضل محفوظة من غير اسمه. متأكد؟','امسح المورد',()=>{DB.suppliers=DB.suppliers.filter(x=>x.id!=='${id}');save();enqueue({type:'softdel',table:'suppliers',rowId:'${id}'});go('#/suppliers');toast('اتمسح');})">مسح المورد</button>
 </div>`+navbar('truck');}
 /* ============ invoice ============ */
 let invDraft=null;
@@ -897,9 +988,13 @@ function saveInvoice(andPrint){const d=invDraft;if(!d.customerId){toast('اخت�
 if(!d.items.length){toast('ضيف صنف واحد على الأقل');return;}
 for(const it of d.items){const p=prod(it.productId);if(p&&it.qty>p.stock){toast(`الكمية من "${it.name}" أكبر من المتاح (${fmt(p.stock)})`);return;}}
 const m=invMath(d);const total=m.total;const pm=invPayMath(d,m);const paid=Math.round((pm.paid+pm.applied)*100)/100;
-const inv={id:uid(),num:DB.nextNum++,date:new Date().toISOString(),customerId:d.customerId,priceType:d.priceType,items:d.items.map(it=>({...it})),discPct:m.discPct,taxPct:m.taxPct,discAmt:m.discAmt,taxAmt:m.taxAmt,total,paid,creditUsed:pm.applied||0};
-d.items.forEach(it=>{const p=prod(it.productId);if(p){const b=p.stock;p.stock=Math.round((p.stock-it.qty)*100)/100;logMove(p.id,'sale',-it.qty,b,p.stock,'فاتورة #'+inv.num);}});
-DB.invoices.push(inv);if(pm.applied>0)DB.payments.push({id:uid(),kind:'in',partyType:'c',partyId:d.customerId,amount:-pm.applied,note:'خصم من رصيده في فاتورة #'+inv.num.toLocaleString(AR),date:new Date().toISOString()});if(d._draftId){DB.drafts=DB.drafts.filter(x=>x.id!==d._draftId);}save();
+const items=d.items.map(it=>({...it,moveId:uid(),moveKind:'sale'}));
+const inv={id:uid(),num:DB.nextNum++,date:new Date().toISOString(),customerId:d.customerId,priceType:d.priceType,items,discPct:m.discPct,taxPct:m.taxPct,discAmt:m.discAmt,taxAmt:m.taxAmt,deliveryFee:num(d.deliveryFee)||0,total,paid,creditUsed:pm.applied||0};
+items.forEach(it=>{const p=prod(it.productId);if(p){const b=p.stock;p.stock=Math.round((p.stock-it.qty)*100)/100;logMove(p.id,'sale',-it.qty,b,p.stock,'فاتورة #'+inv.num,it.moveId);}});
+DB.invoices.push(inv);let creditPayId=null;
+if(pm.applied>0){creditPayId=uid();DB.payments.push({id:creditPayId,kind:'in',partyType:'c',partyId:d.customerId,amount:-pm.applied,note:'خصم من رصيده في فاتورة #'+inv.num.toLocaleString(AR),date:new Date().toISOString()});}
+if(d._draftId){DB.drafts=DB.drafts.filter(x=>x.id!==d._draftId);}save();
+enqueue({type:'invoice',table:'invoices',rowId:inv.id,payload:Object.assign({},inv,{creditPaymentId:creditPayId})});
 const preset=d._preset;invDraft=null;
 if(andPrint){printInvoice(inv);setTimeout(()=>window.print(),80);}
 go(preset?'#/customers/'+preset:'#/');toast(pm.over>0?('الفاتورة اتحفظت ✓ — '+fmt(pm.over)+' ج زيادة اتحطت رصيد للزبون'):'الفاتورة اتحفظت ✓');}
@@ -978,9 +1073,12 @@ function savePurchase(){const d=purDraft;if(!d.supplierId){toast('اختار ا�
 if(!d.items.length){toast('ضيف صنف واحد على الأقل');return;}
 for(const it of d.items){it.cost=num(it.cost);if(it.cost<=0){toast('اكتب سعر الشراء لـ"'+it.name+'"');return;}}
 const total=d.items.reduce((s,it)=>s+it.qty*it.cost,0);let paid=Math.min(num(d.paid),total);
-d.items.forEach(it=>{const p=prod(it.productId);if(p){const b=p.stock;p.stock=Math.round((p.stock+it.qty)*100)/100;p.cost=it.cost;logMove(p.id,'in',it.qty,b,p.stock,'توريد');}});
-DB.purchases.push({id:uid(),date:new Date().toISOString(),supplierId:d.supplierId,items:d.items.map(it=>({...it})),total,paid});
-save();const preset=d._preset;purDraft=null;
+const purItems=d.items.map(it=>({...it,moveId:uid()}));
+purItems.forEach(it=>{const p=prod(it.productId);if(p){const b=p.stock;p.stock=Math.round((p.stock+it.qty)*100)/100;p.cost=it.cost;logMove(p.id,'in',it.qty,b,p.stock,'توريد',it.moveId);}});
+const pur={id:uid(),date:new Date().toISOString(),supplierId:d.supplierId,items:purItems,total,paid};
+DB.purchases.push(pur);
+save();
+enqueue({type:'purchase',table:'purchases',rowId:pur.id,payload:pur});const preset=d._preset;purDraft=null;
 go(preset?'#/suppliers/'+preset:'#/');toast('التوريد اتحفظ ✓');}
 /* ============ payment ============ */
 function openPaymentSheet(kind,presetId){const isIn=kind==='in';const parties=isIn?DB.customers:DB.suppliers;
@@ -994,8 +1092,9 @@ ${parties.map(x=>{const bb=isIn?custBalance(x.id):suppBalance(x.id);const lbl=is
 setTimeout(()=>$('#pay-amt')?.focus(),60);}
 function savePayment(kind){const pid=$('#pay-party').value;const amt=num($('#pay-amt').value);const note=$('#pay-note').value.trim();
 if(amt<=0){toast('اكتب المبلغ');return;}
-DB.payments.push({id:uid(),date:new Date().toISOString(),kind,partyId:pid,partyType:kind==='in'?'c':'s',amount:amt,note});
-save();closeSheet();render();toast('الدفعة اتسجلت ✓');}
+const pay={id:uid(),date:new Date().toISOString(),kind,partyId:pid,partyType:kind==='in'?'c':'s',amount:amt,note};
+DB.payments.push(pay);
+save();enqueue({type:'payment',table:'payments',rowId:pay.id,payload:pay});closeSheet();render();toast('الدفعة اتسجلت ✓');}
 /* ============ product / party sheets ============ */
 function openProductSheet(pid,fromPur){const p=pid?prod(pid):null;
 pendingPhoto=null;
@@ -1016,7 +1115,7 @@ ${fromPur?'':`<div class="field"><div class="lbl">الكمية الحالية</d
 ${fromPur?`<div class="alert" style="margin:0 0 13px"><span style="color:#9A6A14">${ic('box',18)}</span><div class="tx">الكمية اللي داخلة هتكتبها في التوريد نفسه بعد ما تضيف الصنف.</div></div>`:''}
 <button class="btn btn-p" style="width:100%" onclick="saveProduct('${pid||''}',${fromPur?'true':'false'})">${p?'حفظ التعديلات ✓':fromPur?'ضيف الصنف للتوريد ✓':'ضيف الصنف ✓'}</button>
 ${p&&!fromPur?`<button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="openMoveSheet('${p.id}')">📋 سجل حركة الصنف</button>`:''}
-${p?`<button class="btn-danger" onclick="closeSheet();confirmSheet('هتمسح الصنف ده من المخزون (الفواتير القديمة هتفضل زي ما هي). متأكد؟','امسح الصنف',()=>{DB.products=DB.products.filter(x=>x.id!=='${pid}');save();PHOTOS.del('${pid}').catch(()=>{});if(photoURLs['${pid}']){URL.revokeObjectURL(photoURLs['${pid}']);delete photoURLs['${pid}'];}render();toast('اتمسح');})">مسح الصنف</button>`:''}`);hydratePhotos();}
+${p?`<button class="btn-danger" onclick="closeSheet();confirmSheet('هتمسح الصنف ده من المخزون (الفواتير القديمة هتفضل زي ما هي). متأكد؟','امسح الصنف',()=>{DB.products=DB.products.filter(x=>x.id!=='${pid}');save();enqueue({type:'softdel',table:'products',rowId:'${pid}'});PHOTOS.del('${pid}').catch(()=>{});if(photoURLs['${pid}']){URL.revokeObjectURL(photoURLs['${pid}']);delete photoURLs['${pid}'];}render();toast('اتمسح');})">مسح الصنف</button>`:''}`);hydratePhotos();}
 function openMoveSheet(pid){const p=prod(pid);if(!p)return;const mv=(DB.movements||[]).filter(m=>m.pid===pid).sort((a,b)=>new Date(b.date)-new Date(a.date));
 const sold=mv.filter(m=>m.kind==='sale'||m.kind==='order').reduce((s,m)=>s-m.qty,0);
 const inn=mv.filter(m=>m.kind==='in').reduce((s,m)=>s+m.qty,0);
@@ -1033,13 +1132,13 @@ const st=$('#fp-stock');
 const data={name,cat:$('#fp-cat').value,unit:$('#fp-unit').value.trim()||'قطعة',wPrice:num($('#fp-w').value),rPrice:num($('#fp-r').value),cost:num($('#fp-cost').value),stock:st?num(st.value):0,lowAt:num($('#fp-low').value)};
 const ph=pendingPhoto;pendingPhoto=null;
 try{
-if(pid){const p=prod(pid);if(st&&Math.round((num(st.value)-p.stock)*100)/100!==0){logMove(pid,'edit',Math.round((num(st.value)-p.stock)*100)/100,p.stock,num(st.value),'تعديل يدوي');}Object.assign(p,data);
+if(pid){const p=prod(pid);const md=st?Math.round((num(st.value)-p.stock)*100)/100:0;if(st&&md!==0){const mid=uid();logMove(pid,'edit',md,p.stock,num(st.value),'تعديل يدوي',mid);enqueue({type:'upsert',table:'movements',rowId:mid,prefer:'resolution=ignore-duplicates',row:ENT.movements.map(DB.movements[DB.movements.length-1])});}Object.assign(p,data);
  if(ph==='REMOVE'){await PHOTOS.del(pid).catch(()=>{});p.photo=0;p.photoVer=Date.now();if(photoURLs[pid]){URL.revokeObjectURL(photoURLs[pid]);delete photoURLs[pid];}}
  else if(ph&&ph.blob){await PHOTOS.set(pid,ph.blob);p.photo=1;p.photoVer=Date.now();photoObjUrl(pid,ph.blob);}
- save();closeSheet();render();toast('اتحفظ ✓');return;}
-const np={id:uid(),...data};DB.products.push(np);if(np.stock>0)logMove(np.id,'open',np.stock,0,np.stock,'رصيد أول');
+ save();enqueue({type:'upsert',table:'products',rowId:pid,row:ENT.products.map(p)});closeSheet();render();toast('اتحفظ ✓');return;}
+const np={id:uid(),...data};DB.products.push(np);if(np.stock>0){const mid0=uid();logMove(np.id,'open',np.stock,0,np.stock,'رصيد أول',mid0);enqueue({type:'upsert',table:'movements',rowId:mid0,prefer:'resolution=ignore-duplicates',row:ENT.movements.map(DB.movements[DB.movements.length-1])});}
 if(ph&&ph.blob){await PHOTOS.set(np.id,ph.blob);np.photo=1;np.photoVer=Date.now();photoObjUrl(np.id,ph.blob);}
-save();closeSheet();
+save();enqueue({type:'upsert',table:'products',rowId:np.id,row:ENT.products.map(np)});closeSheet();
 if(fromPur&&purDraft){purDraft.items.push({productId:np.id,name:np.name,unit:np.unit,qty:1,cost:np.cost});}
 render();toast(fromPur?'الصنف اتضاف للتوريد ✓':'الصنف اتضاف ✓');
 }catch(e){toast('حصلت مشكلة في حفظ الصورة — البيانات اتسجلت من غيرها');save();closeSheet();render();}}
@@ -1057,7 +1156,9 @@ const phone=$('#ft-phone').value.trim();
 let id=pid;
 if(pid){const x=isC?cust(pid):supp(pid);x.name=name;x.phone=phone;if(isC){const seg=$('#ft-seg button.on');if(seg)x.type=seg.dataset.v;}}
 else{id=uid();const obj=isC?{id,name,phone,type:$('#ft-seg button.on')?.dataset.v||'w'}:{id,name,phone};(isC?DB.customers:DB.suppliers).push(obj);}
-save();closeSheet();
+save();
+{const row0=(isC?DB.customers:DB.suppliers).find(x=>x.id===id);if(row0)enqueue({type:'upsert',table:isC?'customers':'suppliers',rowId:id,row:(isC?ENT.customers:ENT.suppliers).map(row0)});}
+closeSheet();
 if(fromInvoice){if(isC&&invDraft){invDraft.customerId=id;const c=cust(id);if(c)invDraft.priceType=c.type;}if(!isC&&purDraft){purDraft.supplierId=id;}}
 render();toast('اتحفظ ✓');}
 /* ============ settings ============ */
