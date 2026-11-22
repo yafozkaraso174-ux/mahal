@@ -566,7 +566,7 @@ function activateTenant(u){
   keys.forEach(k=>{const v=localStorage.getItem(k);if(v!==null)localStorage.setItem(tenantKey(k),v);});
  }
  KEY=tenantKey('mahal_v1');SYNC_KEY=tenantKey('mahal_sync_v1');DIRTY_KEY=tenantKey('mahal_db_changed_at');OUTBOX_KEY=tenantKey('mahal_outbox_v1');SYNC2_KEY=tenantKey('mahal_sync2_v1');
- const blank=seed();ENT_ORDER.forEach(k=>blank[k]=[]);blank.devices=[];blank.contracts=[];blank.tickets=[];blank.users=[];blank.drafts=[];blank.settings.shopName='محلك';blank.settings.migratedV2=true;blank.settings.pay={cash:{on:true}};blank.settings.zones=[];blank.settings.deliveryOn=true;blank.settings.deliveryFee=0;
+ const blank=seed();ENT_ORDER.forEach(k=>blank[k]=[]);blank.devices=[];blank.contracts=[];blank.tickets=[];blank.users=[];blank.drafts=[];blank.settings.shopName='محلك';blank.settings.migratedV2=true;blank.settings.pay=paymentDefaults();blank.settings.zones=[];blank.settings.deliveryOn=true;blank.settings.deliveryFee=0;
  let old=null;try{old=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}
  DB=Object.assign(blank,old||{});DB.settings=Object.assign(blank.settings,(old&&old.settings)||{},{migratedV2:true});
  if(PHOTOS.db){PHOTOS.db.close();PHOTOS.db=null;}
@@ -1737,7 +1737,9 @@ return `<div class="set-row" style="cursor:default">${ic('store')}<span>المت
 function zonesHTML(){return DB.settings.zones.map((z,i)=>`<div style="display:flex;gap:7px;margin-bottom:7px"><input value="${esc(z.name)}" placeholder="اسم المنطقة (مثال: داخل شربين)" oninput="DB.settings.zones[${i}].name=this.value;save()" style="flex:1.6;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit"><input type="number" min="0" step="any" value="${z.fee}" placeholder="السعر" oninput="DB.settings.zones[${i}].fee=Math.max(0,+this.value||0);save()" style="flex:0.7;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 8px;font-size:13px;font-family:inherit;direction:ltr;text-align:center"><button onclick="DB.settings.zones.splice(${i},1);save();render()" style="color:var(--red);padding:0 8px">${ic('trash',17)}</button></div>`).join('')
 +`<button class="btn" style="width:100%;background:var(--card);border:1px dashed var(--line);color:var(--green);font-weight:800" onclick="DB.settings.zones.push({name:'',fee:0});save();render()">＋ ضيف منطقة</button>`
 +`<div style="font-size:11.5px;color:var(--muted);font-weight:600;margin:6px 2px 0">بعد أي تعديل دوس «نزّل الأصناف على المتجر» عشان يوصل للزباين</div>`;}
-function paySettingsHTML(){const p=DB.settings.pay;
+function paymentDefaults(p){p=p&&typeof p==='object'?p:{};
+ for(const k of ['cash','vf','insta','bank']){const old=p[k];p[k]=Object.assign(k==='cash'?{on:true}:{on:false,num:''},old&&typeof old==='object'?old:{});}return p;}
+function paySettingsHTML(){const p=DB.settings.pay=paymentDefaults(DB.settings.pay);
 const numRow=(key,label,ph)=>`<div class="set-row" style="cursor:default;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:9px;font-size:13.5px;flex:1"><input type="checkbox" ${p[key].on?'checked':''} onchange="payToggle('${key}',this.checked)" style="width:18px;height:18px;accent-color:var(--green)"> ${label}</label>${p[key].on?`<input value="${esc(p[key].num)}" placeholder="${ph}" oninput="DB.settings.pay['${key}'].num=this.value;save()" style="width:100%;margin-top:9px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;direction:ltr;text-align:right">`:''}</div>`;
 return `<label class="set-row" style="cursor:pointer"><input type="checkbox" ${p.cash.on?'checked':''} onchange="DB.settings.pay.cash.on=this.checked;save();render()" style="width:18px;height:18px;accent-color:var(--green)"> <span>نقدي عند الاستلام</span></label>`
 +numRow('vf','فودافون كاش','01xxxxxxxxx')

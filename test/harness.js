@@ -694,6 +694,17 @@ ev("curUser={id:'u1',name:'صاحب المحل',owner:true,authId:'owner-uid',pe
  t('switch back restores only own products',ev('DB.products.length')===1&&ev('DB.products[0].id')==='only-a');
  t('switch back restores own queue',ev('outboxGet()[0].qid')==='a');
  t('photo versions are tenant-scoped',ev("tenantKey('mahal_photo_dn')")==='mahal_photo_dn_tenant-unit-a');
+ /* Settings must open for new and previously cached cash-only shops. */
+ ev(`curUser={owner:true,name:'Owner',tenantId:'tenant-unit-a',shopType:'mobile'};DB.settings.pay={cash:{on:true}};`);
+ t('mobile settings opens with cached cash-only payment settings',ev(`vSettings().includes('الإعدادات')&&DB.settings.pay.vf.on===false&&DB.settings.pay.insta.on===false&&DB.settings.pay.bank.on===false`));
+ ev(`curUser.shopType='general';DB.settings.pay={cash:{on:false},vf:{on:true,num:'01012345678'},insta:{on:false,num:'saved@instapay'},bank:{on:false,num:'saved-account'}};window.__payBefore=JSON.stringify(DB.settings.pay);`);
+ t('existing oils settings open unchanged',ev(`vSettings().includes('الإعدادات')&&JSON.stringify(DB.settings.pay)===window.__payBefore`));
+ ev(`DB.settings.pay={cash:{on:false},vf:{on:true,num:'01012345678'}};vSettings();`);
+ t('partial payment defaults preserve existing choices and numbers',ev(`DB.settings.pay.cash.on===false&&DB.settings.pay.vf.on===true&&DB.settings.pay.vf.num==='01012345678'&&DB.settings.pay.insta.on===false`));
+ ev(`delete DB.settings.pay;vSettings();`);
+ t('missing payment settings use safe defaults',ev(`DB.settings.pay.cash.on===true&&DB.settings.pay.bank.on===false`));
+ ev(`DB.settings.pay={cash:{on:true}};localStorage.setItem(KEY,JSON.stringify(DB));activateTenant({tenantId:'tenant-unit-a'});curUser={owner:true,name:'Owner',tenantId:'tenant-unit-a',shopType:'mobile'};`);
+ t('cash-only settings fixed again after cached reload',ev(`vSettings().includes('الإعدادات')&&DB.settings.pay.vf.on===false`));
  t('blocked tenant render hides data',ev(`curUser.tenantBlocked=true;render();document.getElementById('app').innerText||document.getElementById('app').textContent`).includes('الاشتراك موقوف'));
  t('blocked tenant cannot flush',ev('flushOutbox.toString()').includes('curUser.tenantBlocked'));
 
