@@ -129,6 +129,12 @@ button.row{cursor:pointer}
 @keyframes pop{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .set-row{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px;display:flex;align-items:center;gap:11px;margin-bottom:8px;width:100%;text-align:right;font-size:13.5px;font-weight:800}
 .set-row .s{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:2px}
+.store-link-card{display:grid;grid-template-columns:20px minmax(0,1fr)}
+.store-link-card .store-link-info{min-width:0}
+.store-link-card .store-link-url{display:block;direction:ltr;text-align:right;overflow-wrap:anywhere}
+.store-link-card .store-link-actions{grid-column:1/-1;display:flex;gap:8px}
+.store-link-card .store-link-actions .cbtn{min-width:0;background:var(--bg)}
+
 .lockwrap{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:var(--bg)}
 .lockcard{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px 20px;width:100%;max-width:340px;text-align:center}
 .lockcard .lk{width:56px;height:56px;border-radius:20px;background:var(--green-soft);color:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 10px}
@@ -1725,7 +1731,7 @@ if(!SB.ready()){return `<div class="set-row" style="cursor:default"><span style=
 <div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||SB_DEF.url)}" placeholder="https://xxxx.supabase.co" style="direction:ltr;text-align:left" autocomplete="off"></div>
 <div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||SB_DEF.anon)}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <button class="btn btn-p" style="width:100%" onclick="saveShopCfg()">حفظ بيانات المتجر ✓</button>`;}
-return `<div class="set-row" style="cursor:default">${ic('store')}<span>المتجر شغال<span class="s" style="display:block;direction:ltr;text-align:right">${esc(sUrl)}</span></span><button class="cbtn" style="flex:0 0 62px" onclick="copyStoreLink()">${ic('copy',14)} نسخ</button><button class="cbtn" style="flex:0 0 62px;background:var(--green-soft);color:var(--green);margin-inline-start:6px" onclick="openStore()">${ic('open',14)} فتح</button></div>
+return `<div class="set-row store-link-card" style="cursor:default">${ic('store')}<span class="store-link-info">المتجر شغال<span class="s store-link-url">${esc(sUrl)}</span></span><div class="store-link-actions"><button class="cbtn" onclick="copyStoreLink()">${ic('copy',14)} نسخ</button><button class="cbtn" style="background:var(--green-soft);color:var(--green)" onclick="openStore()">${ic('open',14)} فتح</button></div></div>
 <button class="set-row" onclick="syncShopNow()">${ic('upload')}<span>نزّل الأصناف على المتجر<span class="s" style="display:block">حدّث الأسعار والكميات واسم المحل عند الزباين</span></span></button>
 <button class="set-row" onclick="go('#/orders')">${ic('receipt')}<span>طلبات المتجر<span class="s" style="display:block">شوف الطلبات الجديدة واقفلها</span></span></button>
 <button class="set-row" onclick="sheet('بيانات المتجر',document.getElementById('sb-cfg-tpl').innerHTML)">${ic('gear')}<span>تعديل بيانات الاتصال</span></button>
