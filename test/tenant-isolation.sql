@@ -1,11 +1,14 @@
 BEGIN;
 -- Everything below, including fixtures and counters, is rolled back.
-UPDATE tenants SET status='active' WHERE id='6c239419-4891-4ecb-bab6-25532b26e8d5';
+INSERT INTO tenants(id,name,status) VALUES('6c239419-4891-4ecb-bab6-25532b26e8d5','rollback fixture','active');
+INSERT INTO auth.users(id,email) VALUES('00000000-0000-0000-0000-000000000124','isolation@invalid.example');
+INSERT INTO shop_users(id,tenant_id,auth_id,name,owner,active,perms)
+VALUES('__isolation_user','6c239419-4891-4ecb-bab6-25532b26e8d5','00000000-0000-0000-0000-000000000124','fixture',true,true,'{}');
 INSERT INTO products(id,name,tenant_id,stock) VALUES
  ('__isolation_own','isolation fixture','6c239419-4891-4ecb-bab6-25532b26e8d5',10);
 INSERT INTO customers(id,name,tenant_id) VALUES
  ('__isolation_customer','fixture','6c239419-4891-4ecb-bab6-25532b26e8d5');
-SELECT set_config('request.jwt.claim.sub',(SELECT id::text FROM auth.users WHERE email='testshop.e2e@gmail.com'),true);
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000124',true);
 SET LOCAL ROLE authenticated;
 DO $$ DECLARE n integer; rejected boolean:=false; result jsonb; BEGIN
  SELECT count(*) INTO n FROM products WHERE tenant_id<>public.my_tenant();

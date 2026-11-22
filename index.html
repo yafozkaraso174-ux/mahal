@@ -367,7 +367,7 @@ let flushBusy=false;
 async function flushOutbox(){if(flushBusy||!navigator.onLine||!SB.ready()||!authGet()||!curUser||curUser.tenantBlocked)return;
  flushBusy=true;
  try{await SB.ensureSession();let o=outboxGet();
-  for(const op of o){if(op.failed)continue;
+  for(const op of o){if(!curUser||curUser.tenantBlocked)break;if(op.failed)continue;
    try{await applyOp(op);o=outboxGet().filter(x=>x.qid!==op.qid);outboxSet(o);}
    catch(e){const m=(e&&e.message)||String(e);
     if(m.indexOf('shortage:')===0||m.indexOf('no permission')===0||m.indexOf('missing')>-1){const o2=outboxGet();const f=o2.find(x=>x.qid===op.qid);if(f){f.failed=m;outboxSet(o2);}toast('عملية اتوقفت: '+m);}
@@ -444,7 +444,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r37';
+const APP_VER='2026-11-22r38';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -502,8 +502,8 @@ async function loginOk(u){
  try{await refreshTenant();}catch(e){curUser=null;throw e;}
  sessionStorage.setItem('mahal_cur',JSON.stringify(u));render();
 }
-window.addEventListener('storage',e=>{if(e.key===AUTH_KEY){curUser=null;sessionStorage.removeItem('mahal_cur');closeSheet();render();}});
-function logout(){curUser=null;authSet(null);sessionStorage.removeItem('mahal_cur');closeSheet();go('#/');render();}
+window.addEventListener('storage',e=>{if(e.key===AUTH_KEY&&(!curUser||authGet()?.uid!==curUser.authId)){curUser=null;sessionStorage.removeItem('mahal_cur');closeSheet();location.reload();}});
+function logout(){curUser=null;authSet(null);sessionStorage.removeItem('mahal_cur');closeSheet();go('#/');render();location.reload();}
 function vNoPerm(){return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">مش مسموح</div></div></div><div class="content"><div class="empty"><div class="big">الصفحة دي مش متاحة لحسابك</div>كلم صاحب المحل لو محتاج الصلاحية دي</div></div>`+navbar('');}
 /* ---- إدارة المستخدمين (المالك) ---- */
 function vUsers(){if(!curUser||!curUser.owner)return vNoPerm();
@@ -643,16 +643,18 @@ key:'mahal_shop_cfg',cfg:null,token:null,tokenExp:0,
 load(){if(this.cfg)return;try{this.cfg=JSON.parse(localStorage.getItem(this.key))||{};}catch(e){this.cfg={};}},
 save(){localStorage.setItem(this.key,JSON.stringify(this.cfg||{}));},
 ready(){this.load();return !!((this.cfg.url||SB_DEF.url)&&(this.cfg.anon||SB_DEF.anon));},
-async ensureSession(){this.load();if(this.token&&Date.now()<this.tokenExp)return;
+async ensureSession(){this.load();const principal=authGet();if(curUser&&principal&&curUser.authId!==principal.uid)throw new Error('account changed');if(this.token&&Date.now()<this.tokenExp)return;
  const a=authGet();if(!a||!a.refresh_token)throw new Error('no-auth');
  if(Date.now()<a.expires_at*1000-120000){this.token=a.access_token;this.tokenExp=a.expires_at*1000-120000;return;}
  const r=await fetch((this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{'apikey':this.cfg.anon||SB_DEF.anon,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:a.refresh_token})});
  if(!r.ok){authSet(null);throw new Error('no-auth');}
- const j=await r.json();authSet({access_token:j.access_token,refresh_token:j.refresh_token||a.refresh_token,expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600),uid:(j.user&&j.user.id)||a.uid,email:a.email});},
-async req(path,opt){opt=opt||{};this.load();const anon=this.cfg.anon||SB_DEF.anon,base=(this.cfg.url||SB_DEF.url).replace(/\/$/,'');
+ const j=await r.json();if(!authGet()||authGet().uid!==a.uid)throw new Error('account changed');authSet({access_token:j.access_token,refresh_token:j.refresh_token||a.refresh_token,expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600),uid:(j.user&&j.user.id)||a.uid,email:a.email});},
+async req(path,opt){opt=opt||{};if(curUser&&authGet()&&curUser.authId!==authGet().uid)throw new Error('account changed');this.load();const anon=this.cfg.anon||SB_DEF.anon,base=(this.cfg.url||SB_DEF.url).replace(/\/$/,'');
+ const principal=authGet()?.uid,scope=tenantScope;
  const h=Object.assign({'apikey':anon,'Authorization':'Bearer '+(this.token||anon)},opt.headers||{});
  const r=await fetch(base+'/rest/v1/'+path,Object.assign({},opt,{headers:h}));
- if(!r.ok)throw new Error('req-failed:'+r.status);if(r.status===204)return null;const t=await r.text();return t?JSON.parse(t):null;},
+ if(principal!==authGet()?.uid||scope!==tenantScope)throw new Error('account changed');
+ if(!r.ok)throw new Error('req-failed:'+r.status);if(r.status===204)return null;const t=await r.text();if(principal!==authGet()?.uid||scope!==tenantScope)throw new Error('account changed');return t?JSON.parse(t):null;},
 photoUrlFor(p){return (this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/storage/v1/object/public/product-photos/'+encodeURIComponent(p.id)+'.jpg?v='+(p.photoVer||1);},
 async uploadPhoto(id,blob){const r=await fetch((this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/storage/v1/object/product-photos/'+encodeURIComponent(id)+'.jpg',{method:'POST',headers:{'apikey':this.cfg.anon||SB_DEF.anon,'Authorization':'Bearer '+this.token,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
  if(!r.ok)throw new Error('photo-upload-failed:'+r.status);},
@@ -1849,7 +1851,7 @@ async function printLabels(){const items=Object.keys(labelDraft).filter(pid=>lab
 function go(h){location.hash=h;}
 function render(top){const h=location.hash||'#/';const app=$('#app');
 if(!curUser){app.innerHTML=vLogin();return;}
-if(curUser.tenantBlocked){app.innerHTML='<div class="lockwrap"><div class="lockcard"><h2>الاشتراك موقوف مؤقتًا</h2><p>بياناتك محفوظة. كلم إدارة المنصة للتجديد أو التشغيل.</p><button class="btn btn-p" onclick="location.reload()">تحقق من التجديد</button><button class="btn" onclick="logout()">خروج</button></div></div>';return;}
+if(curUser.tenantBlocked){app.innerHTML='<div class="lockwrap"><div class="lockcard"><h2>الاشتراك موقوف مؤقتًا</h2><p>بياناتك محفوظة. كلم إدارة المنصة للتجديد أو التشغيل.</p><button class="btn btn-p" style="width:100%;font-size:16px;padding:12px;margin-top:16px" onclick="location.reload()">تحقق من التجديد</button><button class="btn" style="width:100%;padding:12px;margin-top:8px" onclick="logout()">خروج</button></div></div>';return;}
 let html;
 if(h==='#/'||h==='#'){closeSheet();html=vDash();}
 else if(h==='#/products'){html=can('products')?vProducts():vNoPerm();}
