@@ -313,7 +313,12 @@ const OUTBOX_KEY='mahal_outbox_v1',SYNC2_KEY='mahal_sync2_v1';
 const ENT={
  products:{table:'products',ts:'updated_at',perms:null,
   map:p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,wprice:p.wPrice,cost:p.cost,stock:p.stock,lowat:p.lowAt||0,barcode:p.barcode||'',deleted:!!p.deleted,photo_url:p.photo?SB.photoUrlFor(p):null,updated_at:new Date().toISOString()}),
-  unmap:(r,old)=>({id:r.id,name:r.name,cat:r.cat,unit:r.unit,rPrice:num(r.price),wPrice:num(r.wprice),cost:num(r.cost),stock:num(r.stock),lowAt:num(r.lowat),barcode:r.barcode||'',deleted:!!r.deleted,photo:(old&&old.photo)||(r.photo_url?1:0),photoVer:(old&&old.photoVer)||(r.photo_url?1:0)})},
+  unmap:(r,old)=>{
+   const sv=r.photo_url?num(((r.photo_url.match(/[?&]v=(\d+)/)||[])[1])||1):0;
+   let photo=0,photoVer=0;
+   if(sv){photo=1;photoVer=sv;}
+   else if(old&&old.photo&&old.photoVer){try{const ups=JSON.parse(localStorage.getItem('mahal_photo_up')||'{}');if(ups[old.id]!==old.photoVer){photo=old.photo;photoVer=old.photoVer;}}catch(e){}}
+   return {id:r.id,name:r.name,cat:r.cat,unit:r.unit,rPrice:num(r.price),wPrice:num(r.wprice),cost:num(r.cost),stock:num(r.stock),lowAt:num(r.lowat),barcode:r.barcode||'',deleted:!!r.deleted,photo,photoVer};}},
  customers:{table:'customers',ts:'updated_at',perms:null,
   map:c=>({id:c.id,name:c.name,phone:c.phone||'',type:c.type||'r',deleted:!!c.deleted,updated_at:new Date().toISOString()}),
   unmap:r=>({id:r.id,name:r.name,phone:r.phone||'',type:r.type||'r',deleted:!!r.deleted})},
@@ -437,7 +442,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r32';
+const APP_VER='2026-11-22r33';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -559,11 +564,12 @@ const photoURLs={};
 function photoObjUrl(id,blob){if(photoURLs[id])URL.revokeObjectURL(photoURLs[id]);photoURLs[id]=URL.createObjectURL(blob);return photoURLs[id];}
 async function hydratePhotos(root){const imgs=(root||document).querySelectorAll('img[data-pid]:not([src])');
 for(const img of imgs){const pid=img.dataset.pid;try{let u=photoURLs[pid];
- if(!u){const blob=await PHOTOS.get(pid);
+ if(!u){
+  const p=prod(pid);let dn={};try{dn=JSON.parse(localStorage.getItem('mahal_photo_dn')||'{}');}catch(e){}
+  if(p&&p.photo&&dn[pid]!==p.photoVer){try{const r=await fetch(SB.photoUrlFor(p));if(r.ok){const b2=await r.blob();await PHOTOS.set(pid,b2);dn[pid]=p.photoVer;localStorage.setItem('mahal_photo_dn',JSON.stringify(dn));}}catch(e){}}
+  const blob=await PHOTOS.get(pid);
   if(blob){u=photoObjUrl(pid,blob);}
-  else{const p=prod(pid);
-   if(p&&p.photo){try{const r=await fetch(SB.photoUrlFor(p));if(r.ok){const b2=await r.blob();await PHOTOS.set(pid,b2);u=photoObjUrl(pid,b2);}}catch(e){}}
-   if(!u){img.replaceWith(imgPhFallback(pid));continue;}}}
+  if(!u){img.replaceWith(imgPhFallback(pid));continue;}}
  img.src=u;}catch(e){}}
 }
 function imgPhFallback(pid){const p=prod(pid);const d=document.createElement('div');d.className='ic';d.style.cssText='width:38px;height:38px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--green-soft);color:var(--green)';d.innerHTML=ic(catIcon(p?p.cat:''));return d;}

@@ -654,6 +654,32 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('hydratePhotos cached blob locally',ev(`PHOTOS.get('bp3')`)!==null);
 
 
+/* ---- round 33: photo version propagation ---- */
+ t('unmap reads photoVer from server URL',ev(`ENT.products.unmap({id:'pv1',name:'x',cat:'',unit:'قطعة',price:5,wprice:4,cost:3,stock:1,lowat:0,barcode:'',photo_url:'https://x.co/product-photos/pv1.jpg?v=177',updated_at:'2026-01-01'},null).photoVer`)===177);
+ ev(`localStorage.setItem('mahal_photo_up', JSON.stringify({pv2:5}))`);
+ t('unmap clears photo when server null and upload done',ev(`ENT.products.unmap({id:'pv2',name:'x',cat:'',unit:'قطعة',price:5,wprice:4,cost:3,stock:1,lowat:0,barcode:'',photo_url:null,updated_at:'2026-01-01'},{id:'pv2',photo:1,photoVer:5}).photo`)===0);
+ ev(`localStorage.setItem('mahal_photo_up', '{}')`);
+ t('unmap keeps pending local photo when server null',ev(`ENT.products.unmap({id:'pv3',name:'x',cat:'',unit:'قطعة',price:5,wprice:4,cost:3,stock:1,lowat:0,barcode:'',photo_url:null,updated_at:'2026-01-01'},{id:'pv3',photo:1,photoVer:9}).photoVer`)===9);
+ /* hydratePhotos refetches when server version newer, uses cache when same */
+ await ev(`(async()=>{DB.products.push({id:'pv4',name:'قديم',cat:'',unit:'قطعة',rPrice:5,wPrice:4,cost:3,stock:1,lowAt:0,photo:1,photoVer:2});
+  await PHOTOS.del('pv4');delete photoURLs['pv4'];
+  localStorage.setItem('mahal_photo_dn', JSON.stringify({pv4:1}));
+  window.__oldFetch=window.fetch;window.__fcount=0;
+  window.fetch=async(u)=>{window.__fcount++;return {ok:true,blob:async()=>new Blob(['img'],{type:'image/jpeg'})}};
+  document.body.insertAdjacentHTML('beforeend','<img id="pv4a" data-pid="pv4">');
+  await hydratePhotos();})()`);
+ t('refetch on newer server version',ev('window.__fcount')===1);
+ t('img set after refetch',ev(`document.getElementById('pv4a').src`)==='blob:mock');
+ t('dn marker updated',ev(`JSON.parse(localStorage.getItem('mahal_photo_dn')).pv4`)===2);
+ await ev(`(async()=>{window.__fcount=0;
+  window.fetch=async(u)=>{window.__fcount++;return {ok:false,status:404}};
+  document.body.insertAdjacentHTML('beforeend','<img id="pv4b" data-pid="pv4">');
+  await hydratePhotos();
+  window.fetch=window.__oldFetch;})()`);
+ t('no refetch when version same',ev('window.__fcount')===0);
+ t('cached blob used',ev(`document.getElementById('pv4b').src`)==='blob:mock');
+
+
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
  process.exit(0);
