@@ -126,6 +126,8 @@ const idbStore=new Map();
 const req=(fn)=>{const r={};setTimeout(()=>{try{r.result=fn();r.onsuccess&&r.onsuccess();}catch(e){r.error=e;r.onerror&&r.onerror();}},0);return r;};
 w.indexedDB={open:()=>{const r={};setTimeout(()=>{r.result={objectStoreNames:{contains:()=>true},transaction:()=>({objectStore:()=>({put:(v,k)=>{idbStore.set(k,v);},get:(k)=>req(()=>idbStore.get(k)||null),delete:(k)=>{idbStore.delete(k);}}),set oncomplete(f){setTimeout(f,0);},set onerror(f){}})},r.onsuccess&&r.onsuccess();},0);return r;}};
 w.URL.createObjectURL=()=>'blob:mock';w.URL.revokeObjectURL=()=>{};
+w.HTMLCanvasElement.prototype.getContext=function(){return {fillStyle:'',direction:'',textAlign:'',font:'',lineWidth:0,strokeStyle:'',setLineDash(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillRect(){},fillText(){}};};
+w.HTMLCanvasElement.prototype.toBlob=function(cb){cb(new w.Blob([]));};
 w.fetch=(url,opt)=>mock.handle(url,opt).catch(e=>{if(e&&e.status)return {ok:false,status:e.status,headers:{get:()=>null},text:async()=>JSON.stringify(e.obj),json:async()=>e.obj};throw e;});
 w.print=()=>{};
 Object.defineProperty(w.navigator,'onLine',{get:()=>true});
@@ -344,6 +346,57 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('dayClose net = profit + fees - exp',dc.net===(17+10-10),'net='+dc.net);
  t('dayClose top product',dc.top&&dc.top.name==='سكر'&&dc.top.qty===2);
  t('dayCloseText contains shop name',ev('dayCloseText(dayCloseCalc(\'2020-01-15T00:00:00.000Z\'))').includes('محل البركة'));
+
+ /* 17. stage-3: returns + debt reminder + invoice image */
+ /* return part of invoice #1001 (p1, sold 4 @ 27 cost 25, local stock 6) */
+ const inv1=ev(`DB.invoices.find(i=>i.num===1001)`);
+ ev(`openReturnSheet('${inv1.id}')`);
+ t('return sheet draft built',!!ev('retDraft')&&ev('retDraft.items.length')===1&&ev('retDraft.items[0].max')===4);
+ ev('retQty(0,1);retQty(0,1)');
+ t('retQty clamps at max',ev('retDraft.items[0].qty')===2);
+ ev(`retDraft.refundMethod='رصيد'`);
+ ev('saveReturn()');
+ await sleep(30);
+ const ret1=ev('DB.returns[0]');
+ t('return saved locally',!!ret1&&ret1.total===54&&ret1.refundMethod==='رصيد');
+ t('return restocks locally',ev(`DB.products.find(p=>p.id==='p1').stock`)===8);
+ t('return movement logged',ev(`DB.movements.some(m=>m.kind==='return'&&m.qty===2&&m.pid==='p1')`));
+ t('credit refund creates negative رصيد payment',ev(`DB.payments.some(p=>p.amount===-54&&p.method==='رصيد'&&p.partyId==='c1')`));
+ await ev('flushOutbox()');await sleep(30);
+ const srvRet=mock.tables.sales_returns.find(r=>r.id===ret1.id);
+ t('server has return',!!srvRet&&srvRet.total===54);
+ t('server restocked',mock.tables.products.find(p=>p.id==='p1').stock===8);
+ t('server assigned return num',srvRet&&srvRet.num>1001);
+ t('local return num synced back',ev('DB.returns[0].num')===(srvRet&&srvRet.num));
+ t('server credit payment stored',mock.tables.payments.some(p=>p.amount===-54&&p.method==='رصيد'));
+ /* second return exceeding remaining qty is blocked by max */
+ ev(`openReturnSheet('${inv1.id}')`);
+ t('return max reduced after first return',ev('retDraft.items[0].max')===2);
+ ev('retQty(0,1);retQty(0,1);retQty(0,1)');
+ t('retQty cannot exceed max',ev('retDraft.items[0].qty')===2);
+ ev(`retDraft.refundMethod='كاش'`);
+ ev('saveReturn()');
+ await sleep(30);
+ t('cash refund does NOT create payment',!ev(`DB.payments.some(p=>p.note&&p.note.includes('مرتجع')&&p.method!=='رصيد')`));
+ ev('retDraft=null');
+
+ /* returns hit the day-close calc: isolated day */
+ ev(`DB.returns.push({id:'dr1',num:5,date:'2020-01-15T15:00:00.000Z',invoiceId:'dz1',invoiceNum:2001,customerId:'c1',items:[{productId:'p1',name:'سكر',unit:'كيلو',qty:1,price:30,cost:25}],total:30,refundMethod:'كاش',note:''})`);
+ const dc2=ev(`dayCloseCalc('2020-01-15T00:00:00.000Z')`);
+ t('dayClose cash reduced by cash refund',dc2.cash===45,'cash='+dc2.cash);
+ t('dayClose profit reduced by return',dc2.profit===12,'profit='+dc2.profit);
+ t('dayClose ret field',dc2.ret===30);
+
+ /* debt reminder */
+ t('debtWaText format',ev(`debtWaText({name:'رضوان'},800)`).includes('800')===false&&ev(`debtWaText({name:'رضوان'},800)`).includes('رضوان'));
+ ev(`DB.invoices.push({id:'dd1',num:3001,date:'2020-01-10T10:00:00.000Z',customerId:'c1',priceType:'w',items:[],total:500,paid:100,creditUsed:0,payMethod:'كاش'})`);
+ const since=ev(`custDebtSince('c1')`);
+ t('custDebtSince finds oldest unpaid',since&&new Date(since).toISOString()==='2020-01-10T10:00:00.000Z');
+ t('waLink builds for 01x phone',ev(`waLink('01012345678','hi')`).startsWith('https://wa.me/201012345678'));
+
+ /* invoice canvas renders */
+ const cv=ev(`invoiceCanvas(DB.invoices.find(i=>i.num===1001))`);
+ t('invoice canvas sized',!!cv&&cv.width===820&&cv.height>400);
 
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
