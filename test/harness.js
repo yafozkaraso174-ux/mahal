@@ -306,7 +306,7 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('ENT payment carries method',ENT.payments.map({id:'y9',date:nowIso,kind:'in',partyType:'c',partyId:'c1',amount:5,method:'تحويل'}).method==='تحويل');
  t('ENT expenses roundtrip',(r=>r&&r.title==='إيجار'&&r.amount===150&&r.method==='كاش')(ENT.expenses.unmap(ENT.expenses.map({id:'e0',date:nowIso,title:'إيجار',amount:150,method:'كاش',note:''}))));
  t('ENT returns roundtrip',(r=>r&&r.num===3&&r.refundMethod==='رصيد'&&r.total===60)(ENT.returns.unmap(ENT.returns.map({id:'r0',num:3,date:nowIso,invoiceId:'i1',invoiceNum:1001,customerId:'c1',items:[],total:60,refundMethod:'رصيد',note:''}))));
- t('ENT serviceTxns roundtrip',(r=>r&&r.kind==='تحويل'&&r.amount===1000&&r.fee===10)(ENT.serviceTxns.unmap(ENT.serviceTxns.map({id:'st0',date:nowIso,kind:'تحويل',service:'فودافون كاش',amount:1000,fee:10,customerName:'',note:''}))));
+ t('ENT serviceTxns roundtrip',(r=>r&&r.kind==='تحويل'&&r.amount===1000&&r.fee===10&&r.customerPhone==='01012345678')(ENT.serviceTxns.unmap(ENT.serviceTxns.map({id:'st0',date:nowIso,kind:'تحويل',service:'فودافون كاش',amount:1000,fee:10,customerName:'رضا',customerPhone:'01012345678',note:''}))));
  t('ENT drawer roundtrip',(r=>r&&r.kind==='out'&&r.amount===200)(ENT.drawer.unmap(ENT.drawer.map({id:'d0',date:nowIso,kind:'out',label:'سحب صاحب المحل',amount:200,note:''}))));
  t('ENT dayCloses roundtrip',(r=>r&&r.expected===1850&&r.diff===-30)(ENT.dayCloses.unmap(ENT.dayCloses.map({id:'dc0',day:'2026-11-22',closedAt:nowIso,opening:1000,expected:1850,actual:1820,diff:-30,payload:{},note:''}))));
 
@@ -428,12 +428,16 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('تسوية does not hit drawer',ev(`drawerCalc('${DZ}').expected`)===1685);
  /* service sheet e2e */
  ev('openServiceSheet()');
- ev(`$('#sv-amt').value='100';$('#sv-fee').value='5'`);
+ ev(`$('#sv-amt').value='100';$('#sv-fee').value='5';$('#sv-cust').value='رضا';$('#sv-phone').value='01012345678'`);
  const svcN=ev('DB.serviceTxns.length');
  ev('saveService()');
  t('saveService appends txn',ev('DB.serviceTxns.length')===svcN+1);
  const lastSvc=ev('DB.serviceTxns[DB.serviceTxns.length-1]');
  t('saveService fields',lastSvc.kind==='إرسال'&&lastSvc.amount===100&&lastSvc.fee===5&&lastSvc.service==='فودافون كاش');
+ t('saveService name/phone split',lastSvc.customerName==='رضا'&&lastSvc.customerPhone==='01012345678');
+ ev('openServiceSheet()');
+ t('service sheet has separate name+phone fields',ev(`!!document.getElementById('sv-cust')&&!!document.getElementById('sv-phone')`)===true);
+ ev('closeSheet()');
  ev(`DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!=='${lastSvc.id}')`);
  t('svcHint send text',(()=>{ev(`openServiceSheet();$('#sv-amt').value='100';$('#sv-fee').value='5';svcHint()`);const ok=ev(`$('#sv-hint').textContent.includes(fmt(105))&&$('#sv-hint').textContent.includes('الدرج')`);ev('closeSheet()');return ok;})());
  /* drawer entry sheet e2e */
