@@ -603,6 +603,29 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('assignBarcode stores',ev(`DB.products.find(p=>p.id==='szp1').barcode`)==='777');
  ev(`closeSheet()`);
 
+ /* ---- stage: label printing ---- */
+ ev(`window.JsBarcode=function(el,code,opts){el.setAttribute('data-rendered',code)};window.__printed=0;window.print=()=>{window.__printed++}`);
+ const vlb=ev('vLabels()');
+ t('vLabels renders with barcode badge',vlb.includes('اطبع باركود')&&vlb.includes('صنف باركود'));
+ t('vLabels flags product without barcode',ev('vLabels()').includes('مفيش باركود متسجل'));
+ ev(`lblToggle('bp3')`);
+ t('lblToggle selects 1',ev('labelDraft.bp3')===1);
+ ev(`lblBump('bp3',2)`);
+ t('lblBump adds',ev('labelDraft.bp3')===3);
+ ev(`lblBump('bp3',-5)`);
+ t('lblBump floors at 0',ev('labelDraft.bp3')===0);
+ ev(`lblBump('bp3',4)`);
+ await ev(`printLabels()`);
+ await new Promise(r=>setTimeout(r,150));
+ t('printLabels builds 4 labels',ev(`document.querySelectorAll('#print-area .pl-bc').length`)===4);
+ t('printLabels renders barcodes',ev(`document.querySelectorAll('#print-area .pl-bc[data-rendered]').length`)===4);
+ t('printLabels prints',ev('window.__printed')===1);
+ t('labels small size default',ev(`document.getElementById('print-area').innerHTML.includes('50mm')`)===true);
+ ev(`state.lblSize='m'`);
+ await ev(`printLabels()`);
+ t('labels medium size',ev(`document.getElementById('print-area').innerHTML.includes('70mm')`)===true);
+ t('label preview html',ev(`labelPreviewHTML(DB.products.find(p=>p.id==='bp3'))`).includes('pl-bc'));
+
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
  process.exit(0);
