@@ -220,6 +220,7 @@ function renderAdd(){
  <div class="field"><div class="lbl">الإيميل (بيدخل بيه)</div><input class="inp ltr" id="ad-email" placeholder="ashraf@shop.com"></div>
  <div class="field"><div class="lbl">الباسورد</div>
  <div style="display:flex;gap:8px"><input class="inp ltr" style="flex:1" id="ad-pass"><button class="btn btn-o" style="margin:0;padding:11px 14px;font-size:12.5px;width:auto" onclick="genPass()">توليد 🎲</button></div></div>
+ <div class="field"><div class="lbl">نوع المحل</div><select class="inp" id="ad-type"><option value="general">محل عام (زيوت / بقالة / ...)</option><option value="mobile">محل موبايلات (IMEI + ضمان + تقسيط + صيانة)</option></select></div>
  <div class="field"><div class="lbl">مدة الاشتراك</div>
  <div class="seg" id="ad-seg"><div data-m="1">شهر</div><div data-m="3" class="on">٣ شهور</div><div data-m="6">٦ شهور</div><div data-m="12">سنة</div></div></div>
  <button class="btn btn-p" id="ad-btn" onclick="createShop()">أنشئ المحل ✓</button>
@@ -243,7 +244,9 @@ async function createShop(){
   const uid=sj&&(sj.user?sj.user.id:sj.id);
   if(!sr.ok||!uid)throw (sj&&(sj.msg||sj.message||sj.error_description))||'تعذر إنشاء حساب الدخول (الإيميل مستخدم؟)';
   // Tenant and owner membership are created atomically by a checked server routine.
-  const tid=await rpc('admin_finish_shop',{p_user:uid,p_email:email,p_name:name,p_owner:owner,p_phone:phone,p_months:addMonths});
+  const shopType=($('#ad-type')&&$('#ad-type').value)||'general';
+  const fa={p_user:uid,p_email:email,p_name:name,p_owner:owner,p_phone:phone,p_months:addMonths};if(shopType!=='general')fa.p_shop_type=shopType;
+  const tid=await rpc('admin_finish_shop',fa);
   const end=new Date();end.setMonth(end.getMonth()+addMonths);
   $('#main-wrap').innerHTML=`
   <div class="card" style="text-align:center;margin-top:16px">
