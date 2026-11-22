@@ -1,50 +1,57 @@
 <!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#F5F1E8;--card:#FFF;--line:#EAE2D3;--ink:#23201A;--muted:#8A8172;--green:#1C7A54;--green-soft:#E4F1EA;--amber:#DE9A2B;--amber-soft:#FBF0DC;--red:#C24A3E;--red-soft:#F9E7E5;--blue:#2F6296;--blue-soft:#E8EFF7}
+:root{--bg:#F2ECDD;--card:#FFF;--line:#E4D8BE;--ink:#1B1812;--muted:#7A6F5C;
+--green:#0B6B3D;--green2:#12A150;--green-soft:#D9EFE2;--amber:#E8960C;--amber-soft:#FCEED3;
+--red:#D63B2F;--red-soft:#FBE3E0;--blue:#1D5BB5;--blue-soft:#E3EDFA;--deep:#0A3D27}
 *{box-sizing:border-box;margin:0}
-body{font-family:'Cairo',sans-serif;background:#DDD6C7;color:var(--ink);padding:24px;display:flex;flex-wrap:wrap;gap:24px;justify-content:center}
-.phone{width:375px;min-height:720px;background:var(--bg);border-radius:28px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.18);position:relative;padding-bottom:70px}
-.tag{position:absolute;top:10px;left:10px;background:var(--ink);color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px;z-index:5}
-.appbar{padding:18px 16px 10px;display:flex;align-items:center;gap:10px}
-.appbar .t{font-size:19px;font-weight:800}
-.back{width:32px;height:32px;border-radius:10px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--muted)}
+body{font-family:'Cairo',sans-serif;background:#D8CFBC;color:var(--ink);padding:24px;display:flex;flex-wrap:wrap;gap:24px;justify-content:center}
+.phone{width:375px;min-height:720px;background:var(--bg);border-radius:28px;overflow:hidden;box-shadow:0 10px 34px rgba(0,0,0,.28);position:relative;padding-bottom:66px}
+.tag{position:absolute;top:10px;left:10px;background:#111;color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px;z-index:5}
+.appbar{background:linear-gradient(135deg,var(--green),var(--deep));padding:18px 16px 14px;display:flex;align-items:center;gap:10px;color:#fff}
+.appbar .t{font-size:18px;font-weight:800}
+.appbar .t small{display:block;font-size:11.5px;font-weight:700;opacity:.85}
+.back{width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff}
 .content{padding:4px 12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:10px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px;margin-top:10px;box-shadow:0 2px 8px rgba(90,70,30,.06)}
 .trow{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;padding:6px 0}
 .k{color:var(--muted);font-weight:700}
-.grand{border-top:1.5px dashed var(--line);margin-top:6px;padding-top:10px;font-weight:800;font-size:15px}
+.grand{border-top:2px dashed var(--line);margin-top:6px;padding-top:10px;font-weight:800;font-size:15.5px}
 .btn{display:block;text-align:center;border-radius:14px;padding:13px;font-weight:800;font-size:14.5px;margin-top:10px}
-.btn-p{background:var(--green);color:#fff}
-.btn-o{background:var(--card);border:1px solid var(--line);color:var(--ink)}
-.btn-b{background:var(--blue);color:#fff}
+.btn-p{background:linear-gradient(135deg,var(--green2),var(--green));color:#fff;box-shadow:0 3px 10px rgba(11,107,61,.3)}
+.btn-o{background:var(--card);border:1.5px solid var(--line);color:var(--ink)}
+.btn-b{background:var(--blue);color:#fff;box-shadow:0 3px 10px rgba(29,91,181,.3)}
 .chip{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:99px}
 .chip-g{background:var(--green-soft);color:var(--green)}
 .chip-r{background:var(--red-soft);color:var(--red)}
 .chip-a{background:var(--amber-soft);color:var(--amber)}
-.item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1.5px solid var(--line)}
 .item:last-child{border-bottom:none}
 .item .nm{flex:1;font-weight:700;font-size:14px}
 .item .pr{font-size:12px;color:var(--muted);font-weight:700}
 .step{display:flex;align-items:center;gap:8px}
-.step button{width:28px;height:28px;border-radius:9px;background:var(--green-soft);color:var(--green);font-weight:800;font-size:15px;border:none}
+.step button{width:28px;height:28px;border-radius:9px;background:var(--green);color:#fff;font-weight:800;font-size:15px;border:none}
 .step .q{font-weight:800;min-width:20px;text-align:center}
 .av{width:40px;height:40px;border-radius:13px;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-size:18px}
-.big{font-size:26px;font-weight:800}
-.hero{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-top:10px;text-align:center}
-.hero .lbl{font-size:12.5px;color:var(--muted);font-weight:700}
+.big{font-size:28px;font-weight:900}
+.hero{background:linear-gradient(135deg,var(--green),var(--deep));color:#fff;border-radius:18px;padding:16px;margin-top:10px;text-align:center;box-shadow:0 4px 14px rgba(11,107,61,.35)}
+.hero .lbl{font-size:12.5px;font-weight:700;opacity:.85}
+.hero .note{color:#fff;opacity:.85}
 .row2{display:flex;gap:8px}
-.row2 .mini{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;text-align:center}
-.mini .v{font-size:17px;font-weight:800}
+.row2 .mini{flex:1;border-radius:14px;padding:10px;text-align:center;border:1.5px solid var(--line)}
+.mini .v{font-size:17.5px;font-weight:900}
 .mini .l{font-size:11px;color:var(--muted);font-weight:700}
-.tabbar{position:absolute;bottom:0;left:0;right:0;height:58px;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;color:var(--muted);font-size:11px;font-weight:700}
-.tabbar .on{color:var(--green)}
+.mini.g{background:var(--green-soft)}.mini.r{background:var(--red-soft)}.mini.a{background:var(--amber-soft)}.mini.b{background:var(--blue-soft)}
+.tabbar{position:absolute;bottom:0;left:0;right:0;height:58px;background:var(--card);border-top:1.5px solid var(--line);display:flex;justify-content:space-around;align-items:center;color:var(--muted);font-size:11px;font-weight:700}
+.tabbar .on{color:var(--green);font-weight:900}
 .note{font-size:11.5px;color:var(--muted);font-weight:700;text-align:center;margin-top:8px;line-height:1.7}
-.seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:3px;margin-top:10px}
+.seg{display:flex;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:3px;margin-top:10px}
 .seg div{flex:1;text-align:center;font-size:12.5px;font-weight:800;padding:7px;border-radius:9px;color:var(--muted)}
-.seg .on{background:var(--card);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.wa{background:#E7F6EE;border:1px solid #BFE3CF;border-radius:14px;padding:10px;font-size:12.5px;font-weight:700;line-height:1.9;margin-top:8px}
+.seg .on{background:var(--green);color:#fff}
+.wa{background:#DCF3E5;border:1.5px solid #A8DDBF;border-radius:14px;padding:10px;font-size:12.5px;font-weight:700;line-height:1.9;margin-top:8px}
+.pos{color:var(--green);font-weight:800}.neg{color:var(--red);font-weight:800}
+.inp{background:var(--card);border:2px solid var(--green);border-radius:14px;padding:12px;font-size:18px;font-weight:800;text-align:center;margin-top:8px;color:var(--ink)}
 </style></head><body>
 
 <!-- 1. RETURNS -->
@@ -58,32 +65,32 @@ body{font-family:'Cairo',sans-serif;background:#DDD6C7;color:var(--ink);padding:
 <div class="item" style="opacity:.45"><div class="nm">شاي (علبة ٢٥٠ جم)<div class="pr">٩٥ ج × العلبة</div></div><div class="step"><button>−</button><span class="q">٠</span><button>+</button></div></div>
 </div>
 <div class="card">
-<div class="trow"><span class="k">قيمة المرتجع</span><span style="font-weight:800">٧٢٠ ج</span></div>
+<div class="trow"><span class="k">قيمة المرتجع</span><span style="font-weight:900;font-size:16px">٧٢٠ ج</span></div>
 <div class="trow"><span class="k">المخزون</span><span class="chip chip-g">بيرجع تلقائي ✓</span></div>
 </div>
 <button class="btn btn-p">رجّع ٧٢٠ ج على حساب الزبون ✓</button>
 <button class="btn btn-o">رجّع ٧٢٠ ج كاش من الدرج</button>
-<div class="note">«على الحساب» بتنقص اللي عليه أو تزود رصيده عندك — من غير ما تكتب حاجة</div>
+<div class="note">«كاش من الدرج» بتسجل في حساب الدرج وتنقصه لوحدها</div>
 </div>
 <div class="tabbar"><span>الموردين</span><span>الزباين</span><span class="on">＋ فاتورة</span><span>الأصناف</span><span>الرئيسية</span></div>
 </div>
 
 <!-- 2. END OF DAY -->
 <div class="phone" id="s2"><span class="tag">٢ · كشف آخر اليوم</span>
-<div class="appbar"><div class="back">›</div><div class="t">كشف النهارده · الأحد ٢٢ نوفمبر</div></div>
+<div class="appbar"><div class="back">›</div><div class="t">كشف النهارده<small>الأحد ٢٢ نوفمبر</small></div></div>
 <div class="content">
-<div class="hero"><div class="lbl">مبيعات النهارده</div><div class="big">٣٬٥٣٥ ج</div><div class="note">١٤ فاتورة</div></div>
+<div class="hero"><div class="lbl">مبيعات النهارده</div><div class="big">٣٬٥٣٥ ج</div><div class="note" style="margin-top:2px">١٤ فاتورة</div></div>
 <div class="row2" style="margin-top:10px">
-<div class="mini"><div class="v" style="color:var(--green)">٢٬٩٨٠ ج</div><div class="l">اتقبض كاش ورصيد</div></div>
-<div class="mini"><div class="v" style="color:var(--red)">٥٥٥ ج</div><div class="l">ديون جديدة النهارده</div></div>
+<div class="mini g"><div class="v" style="color:var(--green)">٢٬٩٨٠ ج</div><div class="l">اتقبض كاش ورصيد</div></div>
+<div class="mini r"><div class="v" style="color:var(--red)">٥٥٥ ج</div><div class="l">ديون جديدة النهارده</div></div>
 </div>
 <div class="row2" style="margin-top:8px">
-<div class="mini"><div class="v" style="color:var(--amber)">٢٥٠ ج</div><div class="l">مصروفات</div></div>
-<div class="mini"><div class="v" style="color:var(--green)">٨١٠ ج</div><div class="l">ربح تقريبي صافي</div></div>
+<div class="mini a"><div class="v" style="color:var(--amber)">٢٥٠ ج</div><div class="l">مصروفات</div></div>
+<div class="mini g"><div class="v" style="color:var(--green)">٨١٠ ج</div><div class="l">ربح تقريبي صافي</div></div>
 </div>
 <div class="card">
+<div class="trow"><span class="k">🗄️ المفروض يكون في الدرج</span><span style="font-weight:900">١٬٨٥٠ ج</span></div>
 <div class="trow"><span class="k">أكتر صنف اتباع</span><span style="font-weight:800">سكر (كيلو) — ٤٠ كيلو</span></div>
-<div class="trow"><span class="k">أكبر دفعة اتقبضت</span><span style="font-weight:800">٤٠٣ ج — اسماعيل رزق</span></div>
 </div>
 <button class="btn btn-b">ابعت الكشف لنفسك واتساب 📋</button>
 </div>
@@ -111,12 +118,12 @@ body{font-family:'Cairo',sans-serif;background:#DDD6C7;color:var(--ink);padding:
 <div class="appbar"><div class="back">›</div><div class="t">فاتورة #١٠٠٢</div></div>
 <div class="content">
 <div class="card" style="text-align:center;padding:18px">
-<div style="font-weight:800;font-size:15px">محل البركة</div>
+<div style="font-weight:900;font-size:16px;color:var(--green)">محل البركة</div>
 <div class="note">فاتورة رقم #١٠٠٢ · اسماعيل رزق</div>
-<div class="trow" style="border-top:1.5px dashed var(--line);margin-top:8px;padding-top:10px"><span>سكر (كيلو) × ١</span><b>٣٥ ج</b></div>
+<div class="trow" style="border-top:2px dashed var(--line);margin-top:8px;padding-top:10px"><span>سكر (كيلو) × ١</span><b>٣٥ ج</b></div>
 <div class="trow"><span>زيت عباد ١٠ لتر × ١</span><b>٤٤٧ ج</b></div>
 <div class="trow grand"><span>الإجمالي</span><span>٤٨٢ ج</span></div>
-<div class="trow"><span class="k">المدفوع</span><span style="color:var(--green);font-weight:800">٤٨٢ ج ✓ خالص</span></div>
+<div class="trow"><span class="k">المدفوع</span><span style="color:var(--green);font-weight:900">٤٨٢ ج ✓ خالص</span></div>
 </div>
 <button class="btn btn-p">ابعت الفاتورة واتساب 🧾</button>
 <button class="btn btn-o">اطبع 🖨️</button>
@@ -130,14 +137,42 @@ body{font-family:'Cairo',sans-serif;background:#DDD6C7;color:var(--ink);padding:
 <div class="appbar"><div class="back">›</div><div class="t">مصروفات المحل</div></div>
 <div class="content">
 <div class="card" style="padding:6px 14px">
-<div class="item"><div class="av">🏠</div><div class="nm">إيجار المحل<div class="pr">النهارده · نقدي</div></div><b>١٥٠ ج</b></div>
-<div class="item"><div class="av">🧑‍🏭</div><div class="nm">يومية عامل<div class="pr">النهارده</div></div><b>١٠٠ ج</b></div>
-<div class="item"><div class="av">🚚</div><div class="nm">نقل بضاعة<div class="pr">أمبارح</div></div><b>٧٥ ج</b></div>
+<div class="item"><div class="av">🏠</div><div class="nm">إيجار المحل<div class="pr">النهارده · من الدرج</div></div><b>١٥٠ ج</b></div>
+<div class="item"><div class="av">🧑‍🏭</div><div class="nm">يومية عامل<div class="pr">النهارده · من الدرج</div></div><b>١٠٠ ج</b></div>
+<div class="item"><div class="av">🚚</div><div class="nm">نقل بضاعة<div class="pr">أمبارح · من الدرج</div></div><b>٧٥ ج</b></div>
 </div>
 <button class="btn btn-o">＋ سجّل مصروف</button>
-<div class="hero"><div class="lbl">صافي الربح الحقيقي (الشهر ده)</div><div class="big" style="color:var(--green)">٤٬٢٦٠ ج</div>
-<div class="note">ربح البضاعة ٦٬١٨٥ ج − مصروفات ١٬٩٢٥ ج</div></div>
-<div class="note">الإحصائيات دي بتظهر لصاحب المحل بس — زي الأرباح بالظبط</div>
+<div class="hero"><div class="lbl">صافي الربح الحقيقي (الشهر ده)</div><div class="big">٤٬٢٦٠ ج</div>
+<div class="note" style="margin-top:2px">ربح البضاعة ٦٬١٨٥ ج − مصروفات ١٬٩٢٥ ج</div></div>
+<div class="note">المصروف بتنقص من الدرج لو اتدفع منه — بس «سحب صاحب المحل» مش مصروف ومبيأثرش في الربح</div>
+</div>
+<div class="tabbar"><span>الموردين</span><span>الزباين</span><span>＋ فاتورة</span><span>الأصناف</span><span class="on">الرئيسية</span></div>
+</div>
+
+<!-- 6. DRAWER -->
+<div class="phone" id="s6"><span class="tag">٦ · الدرج (جديد)</span>
+<div class="appbar"><div class="back">›</div><div class="t">الدرج<small>الأحد ٢٢ نوفمبر</small></div></div>
+<div class="content">
+<div class="hero"><div class="lbl">المفروض يكون في الدرج دلوقتي</div><div class="big">١٬٨٥٠ ج</div>
+<div class="note" style="margin-top:2px">رصيد أول اليوم + اللي دخل − اللي خرج</div></div>
+<div class="card" style="padding:6px 14px">
+<div class="item"><div class="nm">🌅 رصيد أول اليوم<div class="pr">من قفلة أمبارح</div></div><span>١٬٠٠٠ ج</span></div>
+<div class="item"><div class="nm">🧾 مبيعات كاش (١٤ فاتورة)<div class="pr">النهارده</div></div><span class="pos">+ ٩٠٠ ج</span></div>
+<div class="item"><div class="nm">🤝 تحصيل دين — اسماعيل رزق<div class="pr">النهارده</div></div><span class="pos">+ ٤٠٣ ج</span></div>
+<div class="item"><div class="nm">🏠 إيجار المحل<div class="pr">مصروف من الدرج</div></div><span class="neg">− ١٥٠ ج</span></div>
+<div class="item"><div class="nm">👤 سحب صاحب المحل<div class="pr">مش مصروف — مش بيأثر في الربح</div></div><span class="neg">− ٢٠٣ ج</span></div>
+<div class="item"><div class="nm">↩️ مرتجع كاش — فاتورة #٩٩٨<div class="pr">خرج من الدرج</div></div><span class="neg">− ١٠٠ ج</span></div>
+</div>
+<button class="btn btn-o">＋ سجّل كاش دخل أو خرج من الدرج</button>
+<div class="card" style="border-color:var(--green)">
+<div style="font-weight:900;font-size:14.5px;text-align:center">🌙 قفلة اليوم</div>
+<div class="note">عدّ الكاش اللي في الدرج بإيدك واكتبه هنا</div>
+<div class="inp">١٬٨٢٠ ج</div>
+<div class="trow" style="margin-top:6px"><span class="k">المفروض</span><b>١٬٨٥٠ ج</b></div>
+<div class="trow"><span class="k">الفرق</span><b style="color:var(--red);font-size:16px">ناقص ٣٠ ج ⚠️</b></div>
+<button class="btn btn-p">اقفل اليوم ✓</button>
+<div class="note">القفلة بتتسجل بتاريخها ووقتها — ولو في فرق بيفضل محفوظ تعرف ترجعله</div>
+</div>
 </div>
 <div class="tabbar"><span>الموردين</span><span>الزباين</span><span>＋ فاتورة</span><span>الأصناف</span><span class="on">الرئيسية</span></div>
 </div>
