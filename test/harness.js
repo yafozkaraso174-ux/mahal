@@ -705,6 +705,20 @@ ev("curUser={id:'u1',name:'صاحب المحل',owner:true,authId:'owner-uid',pe
  t('missing payment settings use safe defaults',ev(`DB.settings.pay.cash.on===true&&DB.settings.pay.bank.on===false`));
  ev(`DB.settings.pay={cash:{on:true}};localStorage.setItem(KEY,JSON.stringify(DB));activateTenant({tenantId:'tenant-unit-a'});curUser={owner:true,name:'Owner',tenantId:'tenant-unit-a',shopType:'mobile'};`);
  t('cash-only settings fixed again after cached reload',ev(`vSettings().includes('الإعدادات')&&DB.settings.pay.vf.on===false`));
+ /* Dual warranty snapshots stay independent and survive sync JSON. */
+ ev(`curUser.shopType='mobile';window.__wx={warrantyDraft:{manufacturer:{period:'12',start:'2024-02-29',label:'Maker'},shop:{period:'days',days:'30',start:'2024-02-29',label:'Shop terms'}}};window.__ws=mobWarrantySnapshot(__wx);`);
+ t('manufacturer month-end date',ev(`__ws.manufacturer.endAt==='2025-02-28'`));
+ t('shop custom days independent of manufacturer',ev(`__ws.shop.endAt==='2024-03-30'&&__ws.shop.unit==='days'`));
+ t('warranty snapshot immutable after draft edits',ev(`__wx.warrantyDraft.shop.label='Changed';__ws.shop.label==='Shop terms'`));
+ t('invoice JSON roundtrip retains dual warranty',ev(`JSON.stringify(ENT.invoices.unmap(ENT.invoices.map({id:'wi',items:[{warranties:__ws}]})).items[0].warranties)===JSON.stringify(__ws)`));
+ t('device JSON roundtrip retains dual warranty',ev(`JSON.stringify(ENT.devices.unmap(ENT.devices.map({id:'wd',warranties:__ws})).warranties)===JSON.stringify(__ws)`));
+ t('no manufacturer-only free shop repair',ev(`!mobShopWarrantyActive({warranties:{manufacturer:{duration:12},shop:{duration:0}}})`));
+ t('future shop warranty is not yet active',ev(`!mobShopWarrantyActive({warranties:{shop:{duration:12,startAt:'2099-01-01',endAt:'2100-01-01'}}})`));
+ t('new warranty requires explicit choices',ev(`(()=>{try{mobWarrantySnapshot({});return false;}catch(e){return true;}})()`));
+ t('invalid custom days rejected',ev(`(()=>{try{mobWarrantySnapshot({warrantyDraft:{manufacturer:{period:'0'},shop:{period:'days',days:'-1'}}});return false;}catch(e){return true;}})()`));
+ t('legacy warranty remains generic',ev(`!warrText({warrantyMonths:12,warrantyEnd:'2027-01-01',soldAt:'2026-01-01'}).includes('ضمان الشركة')`));
+ ev(`curUser.shopType='general';`);
+ t('oils invoice has no mobile warranty section',ev(`mobInvoiceWarrantyHTML({items:[{warranties:__ws}]},false)===''`));
  t('blocked tenant render hides data',ev(`curUser.tenantBlocked=true;render();document.getElementById('app').innerText||document.getElementById('app').textContent`).includes('الاشتراك موقوف'));
  t('blocked tenant cannot flush',ev('flushOutbox.toString()').includes('curUser.tenantBlocked'));
 
