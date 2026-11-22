@@ -3,6 +3,8 @@
 <title>محلّي — لوحة المالك</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
+.owner-nav{position:fixed;bottom:0;left:0;right:0;height:66px;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;gap:60px;align-items:center;z-index:15}.owner-nav button{background:none;border:0;color:var(--muted);font:700 13px Cairo;min-height:44px}.owner-nav .on{color:var(--purple)}.wrap{padding-bottom:100px!important}.owner-tabs{display:flex;gap:4px;background:var(--card);padding:5px;border-radius:12px;margin-top:12px}.owner-tabs button{flex:1;border:0;background:none;color:var(--muted);font:700 12px Cairo;padding:9px 2px;min-height:44px}.owner-tabs .on{background:var(--purple-soft);color:var(--purple);border-radius:9px}.owner-row{display:flex;justify-content:space-between;gap:12px;align-items:center}.owner-shop{display:block;width:100%;text-align:right;color:var(--ink);font:inherit;cursor:pointer}.owner-shop h3{font-size:15px}.owner-shop p,.card p{font-size:12px;color:var(--muted);line-height:1.9;margin-top:9px}hr{border:0;border-top:1px solid var(--line);margin:12px 0}.trow b{overflow-wrap:anywhere;text-align:left}.trow{gap:12px}.owner-money{font-size:30px;font-weight:900;color:var(--purple)}.owner-alert{background:var(--amber-soft);color:var(--amber);padding:10px;border-radius:12px;font-size:12px;margin-top:10px}@media(max-width:440px){.owner-add-grid{grid-template-columns:1fr!important}}.owner-check{display:block;font-size:12px;line-height:1.8;margin-top:12px}button:disabled{opacity:.55}#themeBtn{left:100px}
+
 :root{--bg:#F2ECDD;--card:#FFF;--line:#E4D8BE;--ink:#1B1812;--muted:#7A6F5C;
 --green:#0B6B3D;--green2:#12A150;--green-soft:#D9EFE2;--amber:#E8960C;--amber-soft:#FCEED3;
 --red:#D63B2F;--red-soft:#FBE3E0;--blue:#1D5BB5;--blue-soft:#E3EDFA;--deep:#0A3D27;--purple:#6C3BD6;--purple-soft:#EEE7FB}
@@ -114,7 +116,7 @@ let token=localStorage.getItem('mahal_admin_token')||'';
 let tenants=[];
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('ar-EG',{day:'numeric',month:'long'}):'—';
+const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('ar-EG',{day:'numeric',month:'long',year:'numeric'}):'—';
 const daysLeft=t=>{if(!t.sub_end)return null;const t1=new Date(t.sub_end+'T00:00:00');const t0=new Date();t0.setHours(0,0,0,0);return Math.round((t1-t0)/86400000);};
 function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600);}
 async function api(path,opts){opts=opts||{};opts.headers=Object.assign({'apikey':SUPA.anon,'Authorization':'Bearer '+(token||SUPA.anon),'Content-Type':'application/json'},opts.headers||{});
@@ -124,7 +126,7 @@ async function api(path,opts){opts=opts||{};opts.headers=Object.assign({'apikey'
  if(!r.ok)throw (j&&j.message)||('خطأ '+r.status);return j;}
 async function rpc(name,body){const r=await fetch(SUPA.url+'/rest/v1/rpc/'+name,{method:'POST',headers:{'apikey':SUPA.anon,'Authorization':'Bearer '+(token||SUPA.anon),'Content-Type':'application/json'},body:JSON.stringify(body||{})});
  const t=await r.text();let j=null;try{j=t?JSON.parse(t):null;}catch(e){}
- if(!r.ok)throw (j&&j.message)||('خطأ '+r.status);return j;}
+ if(!r.ok){const e=new Error((j&&j.message)||('خطأ '+r.status));e.definitive=['P0001','23505','23514','22P02','22007','22008','22003'].includes(j?.code);throw e;}return j;}
 
 async function doLogin(){
  const email=$('#lg-email').value.trim(),pass=$('#lg-pass').value;
@@ -150,150 +152,50 @@ async function boot(){
  }catch(e){$('#main-wrap').innerHTML='<div class="note">'+esc(String(e))+'</div>';}
 }
 
-async function loadAll(){
- $('#main-wrap').innerHTML='<div class="note"><span class="spin"></span> بيحمّل…</div>';
- try{
-  tenants=await rpc('admin_list_tenants');
-  renderHome();
- }catch(e){$('#main-wrap').innerHTML='<div class="note" style="color:var(--red)">'+esc(String(e))+'</div>';}
-}
-
-function statusOf(t){const d=daysLeft(t);
- if(t.status!=='active')return{chip:'<span class="chip chip-r">موقوف</span>',txt:d!==null?(d<0?'خلص من '+Math.abs(d)+' يوم':'باقي '+d+' يوم'):'موقوف',cls:'var(--red)',kind:'out'};
- if(d===null)return{chip:'<span class="chip chip-g">فعّال</span>',txt:'مفتوح',cls:'var(--muted)',kind:'ok'};
- if(d<0)return{chip:'<span class="chip chip-r">منتهي</span>',txt:'خلص من '+Math.abs(d)+' يوم',cls:'var(--red)',kind:'out'};
- if(d<=7)return{chip:'<span class="chip chip-a">قرب يخلص</span>',txt:'باقي '+d+' يوم',cls:'var(--amber)',kind:'warn'};
- return{chip:'<span class="chip chip-g">فعّال</span>',txt:'باقي '+d+' يوم',cls:'var(--green)',kind:'ok'};}
-
-function renderHome(){
- const act=tenants.filter(t=>statusOf(t).kind!=='out').length;
- const warn=tenants.filter(t=>statusOf(t).kind==='warn').length;
- $('#main-wrap').innerHTML=`
- <div class="row2" style="margin-top:2px">
- <div class="mini p"><div class="v">${tenants.length}</div><div class="l">محل مشترك</div></div>
- <div class="mini g"><div class="v">${act}</div><div class="l">اشتراك فعّال</div></div>
- <div class="mini a"><div class="v">${warn}</div><div class="l">قرب يخلص</div></div></div>
- <div class="card">${tenants.map((t,i)=>{const s=statusOf(t);return `
-  <div class="shop" onclick="renderDetail(${i})"><div class="av">🏪</div>
-  <div class="nm"><b>${esc(t.name)}</b><span>${esc(t.owner_name||'—')}${t.phone?' · '+esc(t.phone):''}</span></div>
-  <div style="text-align:left">${s.chip}<div class="days" style="color:${s.cls}">${s.txt}</div></div></div>`;}).join('')||'<div class="note">لسه مفيش محلات</div>'}</div>
- <button class="btn btn-p" onclick="renderAdd()">＋ أضف محل جديد</button>
- <div class="note">دوس على أي محل عشان تشوف تفاصيله، تجدده، أو توقفه</div>`;
-}
-
-function renderDetail(i){
- const t=tenants[i];const s=statusOf(t);const d=daysLeft(t);
- const total=t.sub_start&&t.sub_end?Math.max(1,Math.round((new Date(t.sub_end)-new Date(t.sub_start))/86400000)):0;
- const pct=d===null?100:Math.max(0,Math.min(100,Math.round(d/total*100)));
- $('#main-wrap').innerHTML=`
- <div class="row2" style="margin-top:2px">
- <div class="mini p"><div class="v">${t.products}</div><div class="l">صنف</div></div>
- <div class="mini g"><div class="v">${t.invoices_month}</div><div class="l">فاتورة الشهر ده</div></div>
- <div class="mini"><div class="v">${t.users}</div><div class="l">مستخدم</div></div></div>
- <div class="card">
- <div style="display:flex;align-items:center;gap:10px"><div class="av">🏪</div>
- <div style="flex:1"><b style="font-size:16px">${esc(t.name)}</b><div style="font-size:12px;color:var(--muted);font-weight:700">${esc(t.owner_name||'—')}${t.phone?' · '+esc(t.phone):''}</div></div>${s.chip}</div>
- <div class="trow"><span class="k">الاشتراك</span><b>${t.sub_start?fmtD(t.sub_start):'—'} ← ${t.sub_end?fmtD(t.sub_end):'مفتوح'}</b></div>
- <div class="trow"><span class="k">المتبقي</span><b class="days" style="color:${s.cls}">${s.txt}</b></div>
- ${d!==null?`<div class="prog"><i class="${s.kind==='ok'?'':(s.kind==='warn'?'warn':'out')}" style="width:${pct}%"></i></div>`:''}
- <button class="btn btn-g" onclick="renderRenew(${i})">↻ جدد الاشتراك</button>
- ${t.status==='active'
-  ?`<button class="btn btn-r" onclick="toggleTenant(${i},'suspended')">⏻ وقف المحل مؤقتًا</button>`
-  :`<button class="btn btn-g" onclick="toggleTenant(${i},'active')">▶ شغّل المحل</button>`}
- </div>
- <div class="card"><div class="lbl" style="margin-bottom:2px">المستخدمين</div><div id="users-box"><span class="spin"></span></div></div>
- ${t.last_activity?`<div class="note">آخر نشاط: ${new Date(t.last_activity).toLocaleString('ar-EG',{day:'numeric',month:'long',hour:'numeric',minute:'2-digit'})}</div>`:''}
- <button class="btn btn-o" onclick="renderHome()">‹ رجوع للقائمة</button>`;
- api('shop_users?select=name,owner,active,perms&tenant_id=eq.'+t.id).then(us=>{
-  $('#users-box').innerHTML=us.map(u=>`<div class="usr">👤 ${esc(u.name)}<span class="r">${u.owner?'مالك · كل الصلاحيات':'موظف'}${u.active?'':' · موقوف'}</span></div>`).join('')||'<div class="note">مفيش مستخدمين</div>';
- }).catch(()=>{$('#users-box').innerHTML='<div class="note">تعذر التحميل</div>';});
-}
-
-let addMonths=3;
-function renderAdd(){
- addMonths=3;
- $('#main-wrap').innerHTML=`
- <div class="card">
- <div class="field"><div class="lbl">اسم المحل</div><input class="inp" id="ad-name" placeholder="سوبر ماركت الأمانة"></div>
- <div class="field"><div class="lbl">اسم صاحب المحل</div><input class="inp" id="ad-owner" placeholder="الحاج أشرف"></div>
- <div class="field"><div class="lbl">رقم التليفون</div><input class="inp ltr" id="ad-phone" inputmode="tel" placeholder="01001234567"></div>
- <div class="field"><div class="lbl">الإيميل (بيدخل بيه)</div><input class="inp ltr" id="ad-email" placeholder="ashraf@shop.com"></div>
- <div class="field"><div class="lbl">الباسورد</div>
- <div style="display:flex;gap:8px"><input class="inp ltr" style="flex:1" id="ad-pass"><button class="btn btn-o" style="margin:0;padding:11px 14px;font-size:12.5px;width:auto" onclick="genPass()">توليد 🎲</button></div></div>
- <div class="field"><div class="lbl">نوع المحل</div><select class="inp" id="ad-type"><option value="general">محل عام (زيوت / بقالة / ...)</option><option value="mobile">محل موبايلات (IMEI + ضمان + تقسيط + صيانة)</option></select></div>
- <div class="field"><div class="lbl">مدة الاشتراك</div>
- <div class="seg" id="ad-seg"><div data-m="1">شهر</div><div data-m="3" class="on">٣ شهور</div><div data-m="6">٦ شهور</div><div data-m="12">سنة</div></div></div>
- <button class="btn btn-p" id="ad-btn" onclick="createShop()">أنشئ المحل ✓</button>
- <button class="btn btn-o" onclick="renderHome()">إلغاء</button></div>
- <div class="wa">بعد الإنشاء ابعت لصاحب المحل: الإيميل + الباسورد + لينك التطبيق — وأول ما يدخل يلاقي محله فاضي جاهز يضيف أصنافه.</div>`;
- $('#ad-seg').querySelectorAll('div').forEach(d=>d.onclick=()=>{$('#ad-seg').querySelectorAll('div').forEach(x=>x.classList.remove('on'));d.classList.add('on');addMonths=+d.dataset.m;});
- genPass();
-}
-function genPass(){const bytes=crypto.getRandomValues(new Uint8Array(20));const chars='abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#%';$('#ad-pass').value=Array.from(bytes,b=>chars[b%chars.length]).join('');}
-
-async function createShop(){
- const name=$('#ad-name').value.trim(),owner=$('#ad-owner').value.trim(),phone=$('#ad-phone').value.trim(),
-       email=$('#ad-email').value.trim().toLowerCase(),pass=$('#ad-pass').value;
- if(!name||!email||!pass){toast('اسم المحل والإيميل والباسورد مطلوبين');return;}
- if(pass.length<6){toast('الباسورد ٦ حروف على الأقل');return;}
- const btn=$('#ad-btn');btn.disabled=true;btn.innerHTML='<span class="spin"></span> بيتم الإنشاء…';
- try{
-  // ١) حساب الدخول
-  const sr=await fetch(SUPA.url+'/auth/v1/signup',{method:'POST',headers:{'apikey':SUPA.anon,'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
-  const sj=await sr.json();
-  const uid=sj&&(sj.user?sj.user.id:sj.id);
-  if(!sr.ok||!uid)throw (sj&&(sj.msg||sj.message||sj.error_description))||'تعذر إنشاء حساب الدخول (الإيميل مستخدم؟)';
-  // Tenant and owner membership are created atomically by a checked server routine.
-  const shopType=($('#ad-type')&&$('#ad-type').value)||'general';
-  const fa={p_user:uid,p_email:email,p_name:name,p_owner:owner,p_phone:phone,p_months:addMonths};if(shopType!=='general')fa.p_shop_type=shopType;
-  const tid=await rpc('admin_finish_shop',fa);
-  const end=new Date();end.setMonth(end.getMonth()+addMonths);
-  $('#main-wrap').innerHTML=`
-  <div class="card" style="text-align:center;margin-top:16px">
-  <div style="font-size:44px">✅</div>
-  <b style="font-size:16px">محل "${esc(name)}" اتعمل!</b>
-  <div class="cred">اللينك: ${esc(APPURL.replace(/^https?:\/\//,''))}<br>الإيميل: ${esc(email)}<br>الباسورد: ${esc(pass)}<br>الاشتراك لحد: ${fmtD(end.toISOString().slice(0,10))}</div>
-  <button class="btn btn-g" id="copy-cred">📋 انسخ بيانات الدخول</button>
-  <button class="btn btn-p" onclick="loadAll()">رجوع للقائمة</button></div>`;
-  $('#copy-cred').onclick=()=>copyCred(email,pass);
- }catch(e){toast(String(e).slice(0,120));btn.disabled=false;btn.textContent='أنشئ المحل ✓';}
-}
-function copyCred(email,pass){
- const txt='تطبيق محلّي — بيانات دخول محلك:\nاللينك: '+APPURL+'\nالإيميل: '+email+'\nالباسورد: '+pass;
- navigator.clipboard.writeText(txt).then(()=>toast('اتنسخت ✅'),()=>toast('انسخها يدويًا'));
-}
-
-let renMonths=3;
-function renderRenew(i){
- const t=tenants[i];
- renMonths=3;
- const base=t.sub_end&&new Date(t.sub_end)>new Date()?new Date(t.sub_end):new Date();
- const calc=()=>{const e=new Date(base);e.setMonth(e.getMonth()+renMonths);return e;};
- $('#sheet').innerHTML=`
- <h3>تجديد — ${esc(t.name)}</h3>
- <div class="note">المدة الجديدة بتضاف على ${t.sub_end&&new Date(t.sub_end)>new Date()?'المدة الباقية':'النهارده'}</div>
- <div class="card"><div class="lbl">المدة الجديدة</div>
- <div class="seg" id="rn-seg"><div data-m="1">شهر</div><div data-m="3" class="on">٣ شهور</div><div data-m="6">٦ شهور</div><div data-m="12">سنة</div></div>
- <div class="trow" style="margin-top:10px"><span class="k">الاشتراك الحالي ينتهي</span><b>${t.sub_end?fmtD(t.sub_end):'—'}</b></div>
- <div class="trow"><span class="k">بعد التجديد ينتهي</span><b style="color:var(--purple)" id="rn-end">${fmtD(calc().toISOString().slice(0,10))}</b></div>
- <button class="btn btn-p" onclick="doRenew('${t.id}')">أكّد التجديد ✓</button>
- <button class="btn btn-o" onclick="closeSheet()">إلغاء</button></div>`;
- $('#rn-seg').querySelectorAll('div').forEach(d=>d.onclick=()=>{$('#rn-seg').querySelectorAll('div').forEach(x=>x.classList.remove('on'));d.classList.add('on');renMonths=+d.dataset.m;$('#rn-end').textContent=fmtD(calc().toISOString().slice(0,10));});
- $('#ov').classList.remove('hidden');
-}
-async function doRenew(tid){
- try{const nd=await rpc('admin_extend_subscription',{p_tenant:tid,p_months:renMonths});
-  closeSheet();toast('اتجدد لحد '+fmtD(nd));loadAll();
- }catch(e){toast(String(e).slice(0,100));}
-}
-async function toggleTenant(i,st){
- const t=tenants[i];
- if(!confirm(st==='active'?'تشغيل المحل؟':'توقف المحل مؤقتًا؟ بياناته هتفضل محفوظة.'))return;
- try{await rpc('admin_set_tenant_status',{p_tenant:t.id,p_status:st});
-  toast(st==='active'?'المحل اتشغّل ✅':'المحل اتوقف ⏸');loadAll();
- }catch(e){toast(String(e).slice(0,100));}
-}
 function closeSheet(){$('#ov').classList.add('hidden');}
-$('#ov').addEventListener('click',e=>{if(e.target.id==='ov')closeSheet();});
+/* @owner-dashboard */
+/* Owner dashboard. All mutations are explicit online server actions. */
+let ownerData={today:'',shops:[],entries:[]},ownerFilter='',ownerSearch='',paymentShop='',paymentMonth='',ownerBusy=false,ownerPending=null;
+const ownerMoney=n=>Number(n||0).toLocaleString('ar-EG',{maximumFractionDigits:2});
+const ownerMethods={cash:'نقدي',insta:'إنستاباي',vf:'فودافون كاش',bank:'تحويل بنكي'};
+const ownerId=()=>crypto.randomUUID();
+function ownerPendingKey(){try{return 'mahal_owner_pending_'+JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).sub;}catch(e){return 'mahal_owner_pending_local';}}
+function ownerToday(){return ownerData.today||new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
+function ownerDateAdd(d,m){const [y,mo,day]=d.split('-').map(Number),target=new Date(Date.UTC(y,mo-1+m,1)),last=new Date(Date.UTC(target.getUTCFullYear(),target.getUTCMonth()+1,0)).getUTCDate();target.setUTCDate(Math.min(day,last));return target.toISOString().slice(0,10);}
+function ownerEnd(t,m){return ownerDateAdd(t.sub_end&&t.sub_end>ownerToday()?t.sub_end:ownerToday(),m);}
+function ownerDays(t){return t.sub_end?Math.round((Date.parse(t.sub_end)-Date.parse(ownerToday()))/86400000):null;}
+function ownerStatus(t){const d=ownerDays(t);return t.status!=='active'?['موقوف يدويًا','r']:d!==null&&d<0?['اشتراك منتهي','r']:d!==null&&d<=7?['تجديد قريب','a']:['شغّال','g'];}
+function ownerBadge(t){const s=ownerStatus(t);return `<span class="chip chip-${s[1]}">${s[0]}</span>`;}
+function ownerKV(k,v){return `<div class="trow"><span class="k">${esc(k)}</span><b>${esc(v)}</b></div>`;}
+function ownerField(label,id,value='',type='text'){return `<div class="field"><label class="lbl" for="${id}">${esc(label)}</label><input class="inp" type="${type}" id="${id}" value="${esc(value)}"></div>`;}
+function ownerNav(active='shops'){return `<nav class="owner-nav"><button class="${active==='shops'?'on':''}" onclick="renderHome()">▦ المحلات</button><button class="${active==='payments'?'on':''}" onclick="renderPayments()">▤ الدفعات</button></nav>`;}
+function ownerShell(title,html,nav='shops'){$('#bar-title').innerHTML=esc(title)+'<small>لوحة مالك المنصة</small>';$('#main-wrap').innerHTML=html+ownerNav(nav);}
+function ownerLast(t){return ownerData.entries.find(e=>e.tenant_id===t.id&&e.kind==='payment'&&!ownerData.entries.some(c=>c.original_id===e.id));}
+async function loadAll(){if(ownerBusy)return;ownerShell('المحلات','<div class="note">بيحمّل…</div>');try{ownerData=await rpc('admin_dashboard');tenants=ownerData.shops;renderHome();ownerRestore();}catch(e){ownerShell('المحلات',`<div class="card"><p>تعذر تحميل لوحة المحلات. اتصال الإنترنت مطلوب، وقد تحتاج ترقية قاعدة البيانات قبل استخدام النسخة دي.</p><div class="note">${esc(String(e))}</div><button class="btn btn-o" onclick="loadAll()">حاول تاني</button></div>`);}}
+function renderHome(){const run=tenants.filter(t=>t.status==='active'&&(ownerDays(t)===null||ownerDays(t)>=0)).length,warn=tenants.filter(t=>ownerStatus(t)[1]==='a').length;const list=tenants.filter(t=>(!ownerSearch||(t.name+' '+t.owner_name+' '+t.phone).includes(ownerSearch))&&(!ownerFilter||(ownerFilter==='run'?t.status==='active'&&(ownerDays(t)===null||ownerDays(t)>=0):ownerFilter==='suspended'?t.status!=='active':ownerDays(t)!==null&&ownerDays(t)<0)));
+ownerShell('المحلات',`<div class="row2"><div class="mini p"><div class="v">${ownerMoney(tenants.length)}</div><div class="l">إجمالي المحلات</div></div><div class="mini g"><div class="v">${ownerMoney(run)}</div><div class="l">شغّالة</div></div><div class="mini a"><div class="v">${ownerMoney(warn)}</div><div class="l">تجديد قريب</div></div></div><button class="btn btn-p" onclick="renderAdd()">＋ إضافة محل جديد</button><div class="field"><input id="owner-search" class="inp" aria-label="ابحث باسم المحل أو صاحبه" placeholder="ابحث باسم المحل أو صاحبه" value="${esc(ownerSearch)}" onchange="ownerSearch=this.value.trim();renderHome()"></div><div class="owner-tabs">${[['','الكل'],['run','شغّال'],['suspended','موقوف'],['expired','منتهي']].map(([k,v])=>`<button class="${ownerFilter===k?'on':''}" onclick="ownerFilter='${k}';renderHome()">${v}</button>`).join('')}</div>${list.map(t=>{const d=ownerDays(t),last=ownerLast(t);return `<button class="card owner-shop" onclick="renderDetail(${tenants.indexOf(t)})"><div class="owner-row"><h3>${esc(t.name)}</h3>${ownerBadge(t)}</div><p>${esc(t.shop_type==='mobile'?'موبايلات':'محل عام')} · ${esc(t.owner_name||'بدون اسم صاحب')}</p><hr>${ownerKV('نهاية الاشتراك',t.sub_end?fmtD(t.sub_end):'مفتوح بدون نهاية')}<p>${d===null?'اشتراك بدون نهاية':d<0?'انتهى من '+ownerMoney(-d)+' يوم':'باقي '+ownerMoney(d)+' يوم'}${last?' · آخر دفعة '+ownerMoney(last.amount)+' ج':''}</p></button>`;}).join('')||'<div class="card note">مفيش محلات مطابقة</div>'}`);}
+function renderDetail(i){const t=tenants[i],last=ownerLast(t);ownerShell(t.name,`<div class="card"><div class="owner-row"><h3>حالة المحل</h3>${ownerBadge(t)}</div>${ownerKV('صاحب المحل',t.owner_name||'—')}${ownerKV('حساب الدخول',t.owner_email||'—')}${ownerKV('نوع المحل',t.shop_type==='mobile'?'موبايلات':'محل عام')}<hr>${ownerKV('نهاية الاشتراك',t.sub_end?fmtD(t.sub_end):'مفتوح بدون نهاية')}${ownerKV('المتبقي',ownerDays(t)===null?'بدون نهاية':ownerDays(t)<0?'منتهي':ownerMoney(ownerDays(t))+' يوم')}<button class="btn btn-g" onclick="renderRenew(${i})">تجديد الاشتراك وتسجيل دفعة</button></div><div class="card"><h3>حساب الاشتراك</h3>${ownerKV('السعر المتفق عليه',t.monthly_price==null?'غير مسجل':ownerMoney(t.monthly_price)+' ج / شهر')}${ownerKV('آخر دفعة مسجلة',last?ownerMoney(last.amount)+' ج · '+fmtD(last.received_on):'مفيش دفعات مسجلة')}<button class="btn btn-o" onclick="ownerPrice(${i})">تعديل السعر المتفق عليه</button><button class="btn btn-g" onclick="ownerReceipt(${i})">تسجيل دفعة بدون تجديد</button><button class="btn btn-o" onclick="paymentShop='${t.id}';renderPayments()">عرض سجل الدفعات</button></div><div class="card"><h3>إدارة المحل</h3><p>تشغيل المحل وتجديد الاشتراك خطوتين مختلفتين.</p><button class="btn ${t.status==='active'?'btn-r':'btn-g'}" onclick="ownerStatusSheet(${i})">${t.status==='active'?'إيقاف المحل مؤقتًا':'تشغيل المحل'}</button></div><button class="btn btn-o" onclick="renderHome()">رجوع للمحلات</button>`);}
+let ownerRenewIndex=0,ownerRenewMonths=1;
+function renderRenew(i){ownerRenewIndex=i;ownerRenewMonths=1;const t=tenants[i];ownerShell('تجديد الاشتراك',`<div class="card"><h3>${esc(t.name)}</h3>${ownerKV('ينتهي حاليًا',t.sub_end?fmtD(t.sub_end):'مفتوح بدون نهاية')}<div class="field"><label class="lbl" for="owner-months">المدة المضافة</label><select id="owner-months" class="inp" onchange="ownerRenewMonths=+this.value;$('#owner-new-end').textContent=fmtD(ownerEnd(tenants[ownerRenewIndex],ownerRenewMonths));$('#owner-amount').value=tenants[ownerRenewIndex].monthly_price==null?'':(tenants[ownerRenewIndex].monthly_price*ownerRenewMonths)"><option value="1">شهر</option><option value="3">٣ شهور</option><option value="6">٦ شهور</option><option value="12">سنة</option></select></div><div class="trow"><span class="k">بعد التجديد ينتهي</span><b id="owner-new-end">${fmtD(ownerEnd(t,1))}</b></div><p>من نهاية الاشتراك الساري، أو من النهارده لو منتهي.</p>${t.sub_end?'':`<label class="owner-check"><input type="checkbox" id="owner-finite"> أوافق على تحويل الاشتراك المفتوح لاشتراك بتاريخ نهاية</label>`}<p>لو المحل موقوف يدويًا، التجديد مش هيشغّله تلقائيًا.</p></div><h3>تسجيل دفعة مستلمة</h3><p>تسجيل مبلغ استلمته بالفعل، مش تحصيل فلوس من صاحب المحل.</p>${ownerField('المبلغ المستلم بالجنيه','owner-amount',t.monthly_price??'','number')}<div class="field"><label class="lbl" for="owner-method">طريقة الاستلام</label><select id="owner-method" class="inp">${Object.entries(ownerMethods).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></div>${ownerField('تاريخ الاستلام','owner-date',ownerToday(),'date')}${ownerField('رقم المرجع (اختياري)','owner-reference')}${ownerField('ملاحظة (اختياري)','owner-note')}<button class="btn btn-g" onclick="ownerRenew(true)">مراجعة التجديد والدفعة</button><button class="btn btn-o" onclick="ownerRenew(false)">تجديد بدون دفعة مستلمة</button><button class="btn btn-o" onclick="renderDetail(${i})">رجوع</button>`);}
+function ownerRenew(paid){const t=tenants[ownerRenewIndex],a=Number($('#owner-amount').value),d=$('#owner-date').value;if(!t.sub_end&&!$('#owner-finite').checked){toast('أكد تحويل الاشتراك المفتوح الأول');return;}if(paid&&(!$('#owner-amount').value||!Number.isFinite(a)||a<=0||Math.abs(Math.round(a*100)-a*100)>0.00001||!d||d>ownerToday())){toast('راجع المبلغ وتاريخ الاستلام');return;}const p={id:ownerId(),tenantId:t.id,action:'renew',expectedEnd:t.sub_end,months:ownerRenewMonths,expectedNewEnd:ownerEnd(t,ownerRenewMonths),startFinite:!t.sub_end,noPayment:!paid};if(paid)Object.assign(p,{amount:a,receivedOn:d,method:$('#owner-method').value,reference:$('#owner-reference').value.trim(),note:$('#owner-note').value.trim()});ownerReview(p,'تأكيد التجديد',`${ownerKV('المحل',t.name)}${ownerKV('نهاية الاشتراك الجديدة',fmtD(ownerEnd(t,ownerRenewMonths)))}${ownerKV('دفعة مستلمة',paid?ownerMoney(a)+' ج':'بدون دفعة')}<p>الحفظ مرة واحدة للتجديد والدفعة مع بعض. الإيقاف اليدوي لا يتغير.</p>`);}
+function ownerStatusSheet(i){const t=tenants[i],stop=t.status==='active';if(!stop&&t.sub_end&&t.sub_end<ownerToday()){toast('جدّد الاشتراك المنتهي الأول');return;}$('#sheet').innerHTML=`<h3>${stop?'إيقاف':'تشغيل'} ${esc(t.name)}؟</h3><div class="card">${ownerKV('الاشتراك',t.sub_end?fmtD(t.sub_end):'مفتوح')}<p>البيانات محفوظة. ${stop?'الإيقاف يمنع الدخول والمزامنة والمتجر عند الاتصال. الأجهزة المفصولة ممكن تفضل تعرض النسخة المحلية لحد ما تتصل.':'التشغيل لا يغيّر تاريخ نهاية الاشتراك.'}</p>${ownerField('السبب (للسجل فقط)','owner-reason')}<button class="btn ${stop?'btn-r':'btn-g'}" onclick="ownerStatusConfirm(${i})">تأكيد ${stop?'الإيقاف':'التشغيل'}</button><button class="btn btn-o" onclick="closeSheet()">رجوع بدون تغيير</button></div>`;$('#ov').classList.remove('hidden');}
+function ownerStatusConfirm(i){const t=tenants[i],reason=$('#owner-reason').value.trim();if(!reason){toast('اكتب السبب');return;}ownerReview({id:ownerId(),tenantId:t.id,action:'status',status:t.status==='active'?'suspended':'active',expectedStatus:t.status,reason},'مراجعة حالة المحل',ownerKV('المحل',t.name)+ownerKV('الحالة الجديدة',t.status==='active'?'موقوف':'شغّال')+ownerKV('السبب',reason));}
+function ownerReview(p,title,body){if(ownerPending?.sent&&ownerPending.id!==p.id){toast('أكد الطلب السابق الأول');return;}ownerPending=p;$('#sheet').innerHTML=`<h3>${esc(title)}</h3><div class="card">${body}<div id="owner-action-error" class="note"></div><button class="btn btn-p" id="owner-submit" onclick="ownerSubmit()">تأكيد الحفظ</button><button class="btn btn-o" id="owner-cancel" onclick="ownerCancel()">إلغاء</button></div>`;$('#ov').classList.remove('hidden');}
+function ownerCancel(){if(ownerBusy||ownerPending?.sent){toast('نتيجة العملية لسه مش مؤكدة. أعد المحاولة بنفس الطلب.');return;}ownerPending=null;localStorage.removeItem(ownerPendingKey());closeSheet();}
+async function ownerSubmit(){if(ownerBusy||!ownerPending)return;if(!navigator.onLine){$('#owner-action-error').textContent='مفيش اتصال. العملية مش محفوظة. اتصل وأعد نفس الطلب.';return;}ownerBusy=true;$('#owner-submit').disabled=true;$('#owner-cancel').disabled=true;try{ownerPending.sent=true;localStorage.setItem(ownerPendingKey(),JSON.stringify(ownerPending));const p={...ownerPending};delete p.sent;await rpc(p.action==='add'?'admin_attach_shop':'admin_subscription_action',{p});ownerPending=null;localStorage.removeItem(ownerPendingKey());$('#ov').classList.add('hidden');toast('اتحفظت ✓');ownerBusy=false;await loadAll();}catch(e){if(e.definitive){ownerPending=null;localStorage.removeItem(ownerPendingKey());$('#owner-action-error').textContent='لم يتم الحفظ: '+String(e)+'. اقفل الرسالة وحدّث البيانات قبل طلب جديد.';$('#owner-cancel').disabled=false;$('#owner-cancel').textContent='إغلاق';return;}$('#owner-action-error').textContent='تعذر تأكيد النتيجة: '+String(e)+'. أعد نفس الطلب، مش هيتكرر الحفظ.';$('#owner-submit').disabled=false;}finally{ownerBusy=false;}}
+function renderPayments(){if(!paymentMonth)paymentMonth=ownerToday().slice(0,7);const corrected=new Set(ownerData.entries.filter(e=>e.kind==='correction').map(e=>e.original_id)),list=ownerData.entries.filter(e=>e.kind==='payment'&&(!paymentShop||e.tenant_id===paymentShop)&&(!paymentMonth||e.received_on.startsWith(paymentMonth))),sum=list.filter(e=>!corrected.has(e.id)).reduce((n,e)=>n+Number(e.amount),0);ownerShell('دفعات الاشتراكات',`<div class="row2"><input class="inp" type="month" aria-label="شهر الدفعات" value="${esc(paymentMonth)}" onchange="paymentMonth=this.value;renderPayments()"><select class="inp" aria-label="فلتر المحل" onchange="paymentShop=this.value;renderPayments()"><option value="">كل المحلات</option>${tenants.map(t=>`<option value="${t.id}" ${t.id===paymentShop?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div><div class="card"><div class="k">المسجل كمستلم في الشهر، بعد التصحيحات</div><div class="owner-money">${ownerMoney(sum)} <small>جنيه</small></div><p>${ownerMoney(list.filter(e=>!corrected.has(e.id)).length)} دفعات</p></div>${list.map(e=>{const t=tenants.find(t=>t.id===e.tenant_id),c=ownerData.entries.find(c=>c.original_id===e.id);return `<div class="card"><div class="owner-row"><h3>${esc(t?.name||'محل')}</h3><b style="color:var(--green)">${ownerMoney(e.amount)} ج</b></div><p>${fmtD(e.received_on)} · ${ownerMethods[e.method]||esc(e.method)}</p>${ownerKV('رقم التسجيل',e.id.slice(0,8))}${e.reference?ownerKV('المرجع',e.reference):''}${e.note?`<p>${esc(e.note)}</p>`:''}${ownerKV('مسجل بواسطة','مالك المنصة')}${c?`<div class="owner-alert">مُلغاة بتصحيح، الأصل محفوظ<br>السبب: ${esc(c.note)}<br>التصحيح ما غيّرش مدة الاشتراك</div>`:`<button class="btn btn-o" onclick="ownerCorrection('${e.id}')">تصحيح دفعة مسجلة بالخطأ</button>`}</div>`;}).join('')||'<div class="note">مفيش دفعات في الفترة دي</div>'}<p>التصحيح يحتفظ بالأصل والسبب. مدة الاشتراك لا تتغير تلقائيًا.</p>`,'payments');}
+function ownerCorrection(id){const e=ownerData.entries.find(e=>e.id===id);$('#sheet').innerHTML=`<h3>تصحيح دفعة مسجلة بالخطأ</h3><p>الدفعة الأصلية ${ownerMoney(e.amount)} ج هتفضل في السجل، وهتُستبعد من الإجمالي. مدة الاشتراك مش هتتغير. لو المبلغ الصحيح مختلف، سجّل الدفعة الصحيحة منفصلة.</p>${ownerField('سبب التصحيح','owner-correction')}<button class="btn btn-r" onclick="ownerCorrectionConfirm('${id}')">مراجعة التصحيح</button><button class="btn btn-o" onclick="closeSheet()">إلغاء</button>`;$('#ov').classList.remove('hidden');}
+function ownerCorrectionConfirm(id){const e=ownerData.entries.find(e=>e.id===id),reason=$('#owner-correction').value.trim();if(!reason){toast('اكتب سبب التصحيح');return;}ownerReview({id:ownerId(),action:'correct',tenantId:e.tenant_id,originalId:id,reason},'تأكيد تصحيح الدفعة',ownerKV('المبلغ المستبعد',ownerMoney(e.amount)+' ج')+ownerKV('السبب',reason));}
+function ownerPrice(i){const t=tenants[i];$('#sheet').innerHTML=`<h3>السعر المتفق عليه، ${esc(t.name)}</h3>${ownerField('بالجنيه لكل شهر','owner-price',t.monthly_price??'','number')}<p>تسجيل الاتفاق فقط. مش هيغيّر دفعات سابقة ولا هيحصّل أي مبلغ.</p><button class="btn btn-p" onclick="ownerPriceConfirm(${i})">مراجعة</button>`;$('#ov').classList.remove('hidden');}
+function ownerPriceConfirm(i){const v=$('#owner-price').value,a=Number(v);if(v===''||a<0||!Number.isFinite(a)){toast('راجع السعر');return;}ownerReview({id:ownerId(),tenantId:tenants[i].id,action:'price',price:a},'تأكيد السعر',ownerKV('السعر الشهري',ownerMoney(a)+' ج'));}
+const ownerLegacyClose=closeSheet;closeSheet=function(){if(ownerPending?.sent){toast('أعد نفس الطلب لتأكيد النتيجة الأول');return;}ownerLegacyClose();};
+function ownerRestore(){try{const p=JSON.parse(localStorage.getItem(ownerPendingKey())||'null');if(p){ownerReview(p,'طلب لسه محتاج تأكيد','<p>ممكن يكون اتحفظ قبل انقطاع الاتصال. أعد نفس الطلب لتأكيد النتيجة بدون تكرار.</p>');}}catch(e){}}
+const ownerBaseLogout=logout;logout=function(){ownerPending=null;$('#ov').classList.add('hidden');ownerBaseLogout();};
+
+function ownerReceipt(i){const t=tenants[i];$('#sheet').innerHTML=`<h3>تسجيل دفعة، ${esc(t.name)}</h3><p>مبلغ استلمته بالفعل، بدون تغيير مدة الاشتراك.</p>${ownerField('المبلغ بالجنيه','owner-amount','','number')}${ownerField('تاريخ الاستلام','owner-date',ownerToday(),'date')}<select class="inp" id="owner-method">${Object.entries(ownerMethods).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select>${ownerField('المرجع (اختياري)','owner-reference')}${ownerField('ملاحظة (اختياري)','owner-note')}<button class="btn btn-p" onclick="ownerReceiptConfirm(${i})">مراجعة الدفعة</button><button class="btn btn-o" onclick="closeSheet()">إلغاء</button>`;$('#ov').classList.remove('hidden');}
+function ownerReceiptConfirm(i){const a=Number($('#owner-amount').value),d=$('#owner-date').value;if(!Number.isFinite(a)||a<=0||!d||d>ownerToday()){toast('راجع المبلغ والتاريخ');return;}ownerReview({id:ownerId(),tenantId:tenants[i].id,action:'receipt',amount:a,receivedOn:d,method:$('#owner-method').value,reference:$('#owner-reference').value.trim(),note:$('#owner-note').value.trim()},'تأكيد دفعة بدون تجديد',ownerKV('المبلغ',ownerMoney(a)+' ج')+'<p>مدة الاشتراك لا تتغير</p>');}
+function renderAdd(){ownerShell('إضافة محل',`<div class="card"><h3>حساب موجود بالفعل</h3><p>إضافة محل لحساب صاحب المحل المسجل والمفعّل. مفيش إنشاء أو عرض باسورد، ومفيش رسالة تلقائية.</p>${ownerField('اسم المحل','ad-name')}${ownerField('اسم صاحب المحل','ad-owner')}${ownerField('موبايل صاحب المحل (اختياري)','ad-phone','','tel')}${ownerField('إيميل الحساب المفعّل','ad-email','','email')}<div class="field"><label class="lbl" for="ad-type">نوع المحل</label><select class="inp" id="ad-type"><option value="general">محل عام</option><option value="mobile">موبايلات</option></select></div><div class="row2 owner-add-grid"><div class="field"><label class="lbl" for="ad-months">مدة الاشتراك</label><select class="inp" id="ad-months">${[1,3,6,12].map(m=>`<option value="${m}">${ownerMoney(m)} شهر</option>`).join('')}</select></div>${ownerField('السعر المتفق عليه / شهر','ad-price','','number')}</div><p>السعر تسجيل للاتفاق فقط، مفيش دفعة هتتسجل بمجرد الإنشاء. الحساب لازم ما يكونش مرتبط بمحل تاني.</p><button class="btn btn-p" onclick="ownerAddReview()">مراجعة إضافة المحل</button><button class="btn btn-o" onclick="renderHome()">إلغاء</button></div><div class="note">إنشاء حساب جديد من داخل اللوحة محتاج مسار إعداد آمن مستقل قبل تفعيله.</div>`);}
+function ownerAddReview(){const name=$('#ad-name').value.trim(),email=$('#ad-email').value.trim().toLowerCase(),price=Number($('#ad-price').value);if(!name||!email.includes('@')||$('#ad-price').value===''||!Number.isFinite(price)||price<0){toast('راجع الاسم والإيميل والسعر');return;}const p={id:ownerId(),action:'add',name,email,owner:$('#ad-owner').value.trim(),phone:$('#ad-phone').value.trim(),shopType:$('#ad-type').value,months:Number($('#ad-months').value),expectedDate:ownerToday(),price};ownerReview(p,'تأكيد إضافة محل لحساب موجود',ownerKV('المحل',name)+ownerKV('الإيميل',email)+ownerKV('النوع',p.shopType==='mobile'?'موبايلات':'محل عام')+ownerKV('مدة الاشتراك',ownerMoney(p.months)+' شهر')+ownerKV('نهاية الاشتراك',fmtD(ownerDateAdd(ownerToday(),p.months)))+ownerKV('السعر الشهري',ownerMoney(price)+' ج')+'<p>حساب مستقل وبيانات فاضية. مفيش دفعة أو رسالة تلقائية.</p>');}
+
 if(token)boot();
 </script><script id="theme-toggle">(function(){var b=document.createElement('button');b.id='themeBtn';b.type='button';function cur(){return document.documentElement.getAttribute('data-theme')==='dark'}function sync(){b.innerHTML=cur()?'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>':'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';b.setAttribute('aria-label',cur()?'الوضع الفاتح':'الوضع الداكن');var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',cur()?'#0b1220':m.dataset.light||m.content);}var m0=document.querySelector('meta[name=theme-color]');if(m0)m0.dataset.light=m0.content;b.onclick=function(){if(cur()){document.documentElement.removeAttribute('data-theme');try{localStorage.setItem('mahal_theme','light')}catch(e){}}else{document.documentElement.setAttribute('data-theme','dark');try{localStorage.setItem('mahal_theme','dark')}catch(e){}}sync()};sync();document.body.appendChild(b)})()</script></body></html>

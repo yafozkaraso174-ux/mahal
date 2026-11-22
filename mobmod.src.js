@@ -13,7 +13,7 @@ ENT.tickets=mobJ('repair_tickets');
 function mobSave(kind,obj){const i=DB[kind].findIndex(x=>x.id===obj.id);if(i<0)DB[kind].push(obj);else DB[kind][i]=obj;save();
  enqueue({type:'upsert',table:ENT[kind].table,rowId:obj.id,row:ENT[kind].map(obj)});}
 function mobNavbar(active){const it=(n,l,r,k)=>`<button class="nav-it${k===active?' on':''}" onclick="go('${r}')"><div class="ic">${ic(n)}</div><div class="tx">${l}</div></button>`;
-return `<div class="navbar">${it('home','الرئيسية','#/','home')}${can('products')?it('box','الأجهزة','#/devices','dev'):''}${can('invoice')?`<div class="fab-wrap"><button class="fab" onclick="go('#/msale')">${ic('plus',26)}</button><div class="tx">بيع جهاز</div></div>`:''}${can('invoice')?it('cash','التقسيط','#/inst','inst'):''}${can('invoice')?it('gear','الصيانة','#/repairs','rep'):''}</div>`;}
+return `<div class="navbar">${it('home','الرئيسية','#/','home')}${can('products')?it('box','الأجهزة','#/devices','dev'):''}${can('invoice')?`<div class="fab-wrap"><button class="fab" onclick="go('#/msale')">${ic('plus',26)}</button><div class="tx">بيع جهاز</div></div>`:''}${can('invoice')?it('cash','التقسيط','#/inst','inst'):''}${can('invoice')?it('gear','الصيانة','#/repairs','rep'):''}${can('customers')||can('invoice')?it('users','العملاء','#/mdebts','debts'):''}</div>`;}
 /* ---------- helpers ---------- */
 const MB_COND={new:'جديد',used:'مستعمل'};
 function luhnOk(s){let sum=0;for(let i=0;i<15;i++){let d=+s[14-i];if(i%2===1){d*=2;if(d>9)d-=9;}sum+=d;}return sum%10===0;}
