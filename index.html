@@ -229,6 +229,7 @@ users:'<circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c.8-3.4 3.3-4.9 6.2-4.9s5.
 truck:'<rect x="2" y="6" width="12" height="10" rx="1"/><path d="M14 10h4.2l2.8 3v3h-7"/><circle cx="7" cy="18.2" r="1.8"/><circle cx="17" cy="18.2" r="1.8"/>',
 receipt:'<path d="M5 3h14v18l-2.3-1.7-2.4 1.7-2.3-1.7-2.3 1.7-2.4-1.7L5 21z"/><path d="M9 8.5h6"/><path d="M9 12.5h6"/>',
 cash:'<rect x="2.5" y="7" width="19" height="11" rx="2"/><circle cx="12" cy="12.5" r="2.8"/><path d="M6.2 10.4h.01"/><path d="M17.8 14.6h.01"/>',
+chart:'<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-8"/><path d="M22 20H2"/>',
 tag:'<path d="M3.5 12.5v-8a1 1 0 0 1 1-1h8l8.5 8.5-8.5 8.5z"/><circle cx="8.5" cy="8.5" r="1.3"/>',
 alert:'<path d="M12 4.5 3 19.5h18z"/><path d="M12 10.5v3.6"/><path d="M12 17.2h.01"/>',
 search:'<circle cx="11" cy="11" r="6.2"/><path d="m20 20-3.6-3.6"/>',
@@ -433,7 +434,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r26';
+const APP_VER='2026-11-22r27';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -858,7 +859,8 @@ ${can('stats')?`<div class="grid2">
  <button class="act" onclick="go('#/purchase')"><div class="ic" style="background:var(--amber-soft);color:#9A6A14">${ic('down')}</div><div class="tx">توريد بضاعة</div></button>
  <button class="act" onclick="openProductSheet()"><div class="ic" style="background:var(--red-soft);color:var(--red)">${ic('tag')}</div><div class="tx">صنف جديد</div></button>
  <button class="act" onclick="go('#/invoices')"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('receipt')}</div><div class="tx">قايمة الفواتير</div></button>
- ${can('stats')?`<button class="act" onclick="go('#/day')"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('cash')}</div><div class="tx">كشف اليوم</div></button>
+ ${can('stats')?`<button class="act" onclick="go('#/stats')"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('chart')}</div><div class="tx">الإحصائيات</div></button>
+ <button class="act" onclick="go('#/day')"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('cash')}</div><div class="tx">كشف اليوم</div></button>
  <button class="act" onclick="go('#/expenses')"><div class="ic" style="background:var(--red-soft);color:var(--red)">${ic('down')}</div><div class="tx">المصروفات</div></button>
  <button class="act" onclick="go('#/drawer')"><div class="ic" style="background:#FDF3DC;color:#9A6A14">${ic('lock')}</div><div class="tx">الدرج</div></button>`:''}
  ${can('invoice')?`<button class="act" onclick="go('#/services')"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('phone')}</div><div class="tx">الخدمات</div></button>`:''}
@@ -1283,6 +1285,64 @@ if(dc.ret)lines.push('مرتجعات: −'+fmt(dc.ret)+' ج');
 lines.push('صافي ربح تقريبي: '+fmt(dc.net)+' ج');
 if(dc.top)lines.push('أكتر صنف اتباع: '+dc.top.name+' ('+fmt(dc.top.qty)+' '+dc.top.unit+')');
 return lines.join('\n');}
+/* ============ stats dashboard ============ */
+const STATS_PERIODS=[['today','النهارده'],['week','الأسبوع ده'],['month','الشهر ده'],['lastmonth','الشهر اللي فات'],['custom','من - إلى']];
+function statsRange(kind,from,to){const now=new Date();
+ const d0=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x;};
+ const d1=d=>{const x=new Date(d);x.setHours(23,59,59,999);return x;};
+ if(kind==='week'){const f=d0(now);f.setDate(f.getDate()-((f.getDay()+1)%7));return{f,t:d1(now)};}
+ if(kind==='month'){const f=d0(now);f.setDate(1);return{f,t:d1(now)};}
+ if(kind==='lastmonth'){const f=d0(now);f.setDate(1);f.setMonth(f.getMonth()-1);const t=new Date(f);t.setMonth(t.getMonth()+1);t.setDate(0);return{f,t:d1(t)};}
+ if(kind==='custom'){return{f:from?d0(from+'T00:00:00'):d0(now),t:to?d1(to+'T00:00:00'):d1(now)};}
+ return{f:d0(now),t:d1(now)};}
+function statsCalc(kind,from,to){const {f,t}=statsRange(kind,from,to);
+ const inR=iso=>{const d=new Date(iso);return d>=f&&d<=t;};
+ const invs=DB.invoices.filter(i=>inR(i.date));
+ const sales=Math.round(invs.reduce((s,i)=>s+i.total,0)*100)/100;
+ const count=invs.length;const avg=count?Math.round(sales/count*100)/100:0;
+ let profit=0;const qtyBy={},revBy={},nameBy={},unitBy={};
+ invs.forEach(i=>i.items.forEach(it=>{profit+=(it.price-(it.cost||0))*it.qty;const k=it.productId||it.name;
+  qtyBy[k]=(qtyBy[k]||0)+it.qty;revBy[k]=(revBy[k]||0)+it.qty*it.price;nameBy[k]=it.name;unitBy[k]=it.unit;}));
+ DB.returns.forEach(r=>{if(inR(r.date))r.items.forEach(it=>{profit-=(it.price-(it.cost||0))*it.qty;const k=it.productId||it.name;
+  qtyBy[k]=(qtyBy[k]||0)-it.qty;revBy[k]=(revBy[k]||0)-it.qty*it.price;});});
+ profit=Math.round(profit*100)/100;
+ const fees=Math.round(DB.serviceTxns.filter(x=>inR(x.date)).reduce((s,x)=>s+(x.fee||0),0)*100)/100;
+ const exps=Math.round(DB.expenses.filter(x=>inR(x.date)).reduce((s,x)=>s+(x.amount||0),0)*100)/100;
+ const net=Math.round((profit+fees-exps)*100)/100;
+ const byC={};invs.forEach(i=>{if(!i.customerId)return;const c=byC[i.customerId]||(byC[i.customerId]={count:0,total:0});c.count++;c.total+=i.total;});
+ let topCust=null;Object.keys(byC).forEach(id=>{const v=byC[id];if(!topCust||v.total>topCust.total)topCust={id,count:v.count,total:Math.round(v.total*100)/100};});
+ if(topCust){const c=cust(topCust.id);topCust.name=c?c.name:'زبون محذوف';}
+ const purs=DB.purchases.filter(p=>inR(p.date));
+ const byS={};purs.forEach(p=>{if(!p.supplierId)return;const s=byS[p.supplierId]||(byS[p.supplierId]={count:0,total:0});s.count++;s.total+=p.total;});
+ let topSupp=null;Object.keys(byS).forEach(id=>{const v=byS[id];if(!topSupp||v.total>topSupp.total)topSupp={id,count:v.count,total:Math.round(v.total*100)/100};});
+ if(topSupp){const s=supp(topSupp.id);topSupp.name=s?s.name:'مورد محذوف';}
+ const sellers=Object.keys(qtyBy).filter(k=>qtyBy[k]>0).map(k=>({name:nameBy[k],unit:unitBy[k]||'',qty:Math.round(qtyBy[k]*100)/100,rev:Math.round(revBy[k]*100)/100})).sort((a,b)=>b.qty-a.qty||b.rev-a.rev).slice(0,3);
+ const slow=DB.products.filter(p=>!p.deleted).map(p=>({name:p.name,unit:p.unit,sold:Math.round((qtyBy[p.id]||0)*100)/100})).sort((a,b)=>a.sold-b.sold).slice(0,3).map(x=>({...x,badge:x.sold<=0?'راكد':'بطيء'}));
+ return{f,t,sales,count,avg,profit,fees,expenses:exps,net,topCust,topSupp,sellers,slow};}
+function vStats(){if(!state.sp)state.sp='month';const kind=state.sp;const cur=DB.settings.currency||'جنيه';
+ const s=statsCalc(kind,state.sf,state.st);
+ const perBtn=([k,l])=>`<button class="${k===kind?'on':''}" onclick="state.sp='${k}';render()">${l}</button>`;
+ const medal=i=>['🥇','🥈','🥉'][i]||'▪️';
+ return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">إحصائيات المحل</div></div></div>
+<div class="content" style="padding-bottom:110px">
+<div class="field"><div class="lbl">الفترة</div><div class="seg" id="st-per">${STATS_PERIODS.map(perBtn).join('')}</div></div>
+${kind==='custom'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div class="field"><div class="lbl">من</div><input type="date" id="st-from" value="${state.sf||''}" onchange="state.sf=this.value;render()"></div>
+<div class="field"><div class="lbl">إلى</div><input type="date" id="st-to" value="${state.st||''}" onchange="state.st=this.value;render()"></div></div>`:''}
+<div class="stat hero" style="margin-bottom:10px"><div class="lbl">مبيعات الفترة</div><div class="val">${fmt(s.sales)} <small>${cur}</small></div><div class="sub">${s.count.toLocaleString(AR)} فاتورة · متوسط الفاتورة ${fmt(s.avg)} ${cur}</div></div>
+<div class="grid2">
+ <div class="stat"><div class="lbl">صافي ربح الفترة</div><div class="val" style="color:var(--green)">${fmt(s.net)} <small>${cur}</small></div><div class="sub">ربح البضاعة ${fmt(s.profit)}${s.fees?` + عمولات ${fmt(s.fees)}`:''} − مصروفات ${fmt(s.expenses)}</div></div>
+ <div class="stat"><div class="lbl">عمولات الخدمات</div><div class="val">${fmt(s.fees)} <small>${cur}</small></div><div class="sub">كاش ورصيد وكروت وفواتير</div></div>
+</div>
+<div class="sec-title">أكبر زبون في الفترة</div>
+${s.topCust?`<div class="row"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('users')}</div><div class="mid"><div class="t">${esc(s.topCust.name)}</div><div class="s">${s.topCust.count.toLocaleString(AR)} فاتورة في الفترة</div></div><div class="end"><div class="amt">${fmt(s.topCust.total)} <small>ج</small></div></div></div>`:`<div class="empty">مفيش فواتير بزباين في الفترة دي</div>`}
+<div class="sec-title">أكبر مورد في الفترة</div>
+${s.topSupp?`<div class="row"><div class="ic" style="background:var(--amber-soft);color:#9A6A14">${ic('truck')}</div><div class="mid"><div class="t">${esc(s.topSupp.name)}</div><div class="s">${s.topSupp.count.toLocaleString(AR)} توريدة في الفترة</div></div><div class="end"><div class="amt">${fmt(s.topSupp.total)} <small>ج</small></div></div></div>`:`<div class="empty">مفيش توريدات في الفترة دي</div>`}
+<div class="sec-title">أعلى ٣ أصناف مبيعًا 🔥</div>
+${s.sellers.length?s.sellers.map((x,i)=>`<div class="row"><div class="mid"><div class="t">${medal(i)} ${esc(x.name)}</div><div class="s">اتباع ${fmt(x.qty)} ${esc(x.unit)}</div></div><div class="end"><div class="amt">${fmt(x.rev)} <small>ج</small></div></div></div>`).join(''):`<div class="empty">مفيش مبيعات في الفترة دي</div>`}
+<div class="sec-title">أقل الأصناف حركة 🐢</div>
+${s.slow.length?s.slow.map(x=>`<div class="row"><div class="mid"><div class="t">${esc(x.name)}</div><div class="s">${x.sold>0?`اتباع ${fmt(x.sold)} ${esc(x.unit)} بس`:'ماتباعش خالص في الفترة'}</div></div><div class="end"><span class="badge ${x.badge==='راكد'?'b-red':'b-amber'}">${x.badge}</span></div></div>`).join(''):`<div class="empty">مفيش أصناف مسجلة</div>`}
+</div>`+navbar('');}
 function vDayClose(){const dc=dayCloseCalc();const cur=DB.settings.currency||'جنيه';
 return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">كشف النهارده</div><div class="hello">${new Date().toLocaleDateString(AR,{weekday:'long',day:'numeric',month:'long'})}</div></div></div>
 <div class="content">
@@ -1648,6 +1708,7 @@ else if(h==='#/purchase'){html=can('suppliers')?vPurchase(null):vNoPerm();}
 else if(h.startsWith('#/purchase/')){html=can('suppliers')?vPurchase(h.split('/')[2]):vNoPerm();}
 else if(h==='#/settings'){html=vSettings();}
 else if(h==='#/expenses'){html=can('stats')?vExpenses():vNoPerm();}
+else if(h==='#/stats'){html=can('stats')?vStats():vNoPerm();}
 else if(h==='#/day'){html=can('stats')?vDayClose():vNoPerm();}
 else if(h==='#/drawer'){html=can('stats')?vDrawer():vNoPerm();}
 else if(h==='#/services'){html=can('invoice')?vServices():vNoPerm();}

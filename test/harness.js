@@ -522,6 +522,38 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('vServices renders',ev('vServices()').includes('عمولات النهارده'));
  t('dash has drawer+services buttons',ev('vDash()').includes("#/drawer")&&ev('vDash()').includes("#/services"));
 
+ /* ---- stats dashboard ---- */
+ t('dash has stats button',ev('vDash()').includes("#/stats"));
+ const wk=ev(`statsRange('week')`);
+ t('statsRange week starts Saturday',wk.f.getDay()===6&&wk.f.getHours()===0);
+ const lm=ev(`statsRange('lastmonth')`);const nowD=new Date();
+ t('statsRange lastmonth full prev month',lm.f.getDate()===1&&lm.f.getMonth()===(nowD.getMonth()+11)%12&&lm.t.getDate()===new Date(nowD.getFullYear(),nowD.getMonth(),0).getDate());
+ const cr=ev(`statsRange('custom','2020-01-05','2020-01-20')`);
+ t('statsRange custom honors from/to',cr.f.getDate()===5&&cr.t.getDate()===20&&cr.t.getHours()===23);
+ /* seed a controlled stats window */
+ ev(`DB.customers.push({id:'sc1',name:'زبون الاحصائيات',phone:'',type:'r'});DB.suppliers.push({id:'ss1',name:'مورد الاحصائيات',phone:''})`);
+ ev(`DB.invoices.push({id:'st1',num:5001,date:'2020-03-10T10:00:00.000Z',customerId:'sc1',priceType:'w',items:[{productId:'p1',name:'سكر',unit:'كيلو',qty:4,price:50,cost:40},{productId:'p2',name:'أرز',unit:'كيلو',qty:2,price:60,cost:50}],total:320,paid:320,creditUsed:0,payMethod:'كاش'})`);
+ ev(`DB.invoices.push({id:'st2',num:5002,date:'2020-03-12T10:00:00.000Z',customerId:'sc1',priceType:'w',items:[{productId:'p1',name:'سكر',unit:'كيلو',qty:1,price:50,cost:40}],total:50,paid:50,creditUsed:0,payMethod:'كاش'})`);
+ ev(`DB.invoices.push({id:'st3',num:5003,date:'2020-03-12T11:00:00.000Z',customerId:'',priceType:'w',items:[{productId:'p3',name:'زيت',unit:'زجاجة',qty:1,price:100,cost:100}],total:100,paid:100,creditUsed:0,payMethod:'كاش'})`);
+ ev(`DB.purchases.push({id:'stp1',date:'2020-03-11T10:00:00.000Z',supplierId:'ss1',items:[],total:900,paid:900})`);
+ ev(`DB.purchases.push({id:'stp2',date:'2020-03-15T10:00:00.000Z',supplierId:'ss1',items:[],total:100,paid:100})`);
+ ev(`DB.serviceTxns.push({id:'sts1',date:'2020-03-10T12:00:00.000Z',kind:'إرسال',service:'فودافون كاش',network:'',amount:500,fee:7,customerName:'',customerPhone:'',note:''})`);
+ ev(`DB.expenses.push({id:'ste1',date:'2020-03-10T13:00:00.000Z',title:'نقل',amount:20,method:'كاش',note:''})`);
+ ev(`DB.returns.push({id:'str1',num:10,date:'2020-03-12T12:00:00.000Z',invoiceId:'st1',invoiceNum:5001,customerId:'sc1',items:[{productId:'p1',name:'سكر',unit:'كيلو',qty:1,price:50,cost:40}],total:50,refundMethod:'كاش',note:''})`);
+ ev(`DB.products.push({id:'szp1',name:'صنف راكد للاحصائيات',cat:'',unit:'قطعة',rPrice:1,wPrice:1,cost:1,stock:3,lowAt:0})`);
+ const sc=ev(`statsCalc('custom','2020-03-01','2020-03-31')`);
+ t('stats sales = sum invoices',sc.sales===470,'sales='+sc.sales);
+ t('stats count+avg',sc.count===3&&Math.round(sc.avg)===157,'count='+sc.count+' avg='+sc.avg);
+ t('stats profit items minus returns',sc.profit===60,'profit='+sc.profit);
+ t('stats fees+expenses+net',sc.fees===7&&sc.expenses===20&&sc.net===47,'fees='+sc.fees+' net='+sc.net);
+ t('stats top customer',sc.topCust&&sc.topCust.name==='زبون الاحصائيات'&&sc.topCust.count===2&&sc.topCust.total===370,'topCust='+JSON.stringify(sc.topCust));
+ t('stats top supplier',sc.topSupp&&sc.topSupp.name==='مورد الاحصائيات'&&sc.topSupp.count===2&&sc.topSupp.total===1000,'topSupp='+JSON.stringify(sc.topSupp));
+ t('stats top seller by qty',sc.sellers[0].name==='سكر'&&sc.sellers[0].qty===4,'s0='+JSON.stringify(sc.sellers[0]));
+ t('stats returns cut qty',sc.sellers.find(x=>x.name==='سكر').qty===4,'سكر qty after return='+JSON.stringify(sc.sellers.map(x=>[x.name,x.qty])));
+ t('stats slow movers flagged',sc.slow.length===3&&sc.slow.every(x=>x.badge==='راكد'||x.badge==='بطيء')&&sc.slow[0].sold===0,'slow='+JSON.stringify(sc.slow));
+ t('vStats renders',ev('vStats()').includes('مبيعات الفترة')&&ev('vStats()').includes('أقل الأصناف حركة'));
+ t('vStats custom shows date inputs',ev(`state.sp='custom';vStats()`).includes('type="date"'));
+
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
  process.exit(0);
