@@ -98,6 +98,7 @@ input,textarea{font-family:inherit;font-size:15px}
     والحماية الحقيقية من صلاحيات قاعدة البيانات RLS)
    ============================================================ */
 const STORE_CFG={url:'https://ofqhrpkgxxbdrhuujgxt.supabase.co',anon:'sb_publishable_CH8nhDJQlV-5xsKYoCZRVg_mUoLsTQw'};
+const TENANT='5336a072-d9eb-43d9-ac91-4d9d6572b781'; /* محل البركة — المرحلة الجاية: subdomain لكل محل */
 /* ============ helpers ============ */
 const $=(s,r=document)=>r.querySelector(s);
 const AR='ar-EG';
@@ -146,8 +147,8 @@ try{
  const h={'apikey':STORE_CFG.anon,'Authorization':'Bearer '+STORE_CFG.anon};
  const base=STORE_CFG.url.replace(/\/$/,'');
  const [pr,ir]=await Promise.all([
-   fetch(base+'/rest/v1/products_public?select=id,name,cat,unit,price,stock,photo_url&order=cat,name',{headers:h}),
-   fetch(base+'/rest/v1/shop_info?select=shop_name,phone,payment,delivery_fee,zones,delivery_on&id=eq.1',{headers:h}),
+   fetch(base+'/rest/v1/products_public?select=id,name,cat,unit,price,stock,photo_url&tenant_id=eq.'+TENANT+'&order=cat,name',{headers:h}),
+   fetch(base+'/rest/v1/shop_info?select=shop_name,phone,payment,delivery_fee,zones,delivery_on&id=eq.1&tenant_id=eq.'+TENANT,{headers:h}),
  ]);
  if(pr.status===404){notReady=true;products=[];render();return;}
  if(!pr.ok)throw 0;
@@ -155,7 +156,7 @@ try{
  Object.keys(cart).forEach(id=>{const p=products.find(x=>x.id===id);if(!p||!p.stock||p.stock<=0)delete cart[id];else if(cart[id]>p.stock)cart[id]=p.stock;});saveCart();
  if(ir.ok){let rows=null;try{rows=await ir.json();}catch(e){}
  if(rows&&rows[0]){shopInfo=Object.assign(shopInfo,rows[0]);if(rows[0].payment&&typeof rows[0].payment==='object')payCfg=rows[0].payment;}
- else if(ir.status===400){const r2=await fetch(base+'/rest/v1/shop_info?select=shop_name,phone&id=eq.1',{headers:h});if(r2.ok){const rows2=await r2.json();if(rows2&&rows2[0])shopInfo=Object.assign(shopInfo,rows2[0]);}}}
+ else if(ir.status===400){const r2=await fetch(base+'/rest/v1/shop_info?select=shop_name,phone&id=eq.1&tenant_id=eq.'+TENANT,{headers:h});if(r2.ok){const rows2=await r2.json();if(rows2&&rows2[0])shopInfo=Object.assign(shopInfo,rows2[0]);}}}
 }catch(e){loadErr=true;products=[];}
 render();}
 /* ============ views ============ */
@@ -246,7 +247,7 @@ for(const it of items){const p=products.find(x=>x.id===it.id);
 const zn=zoneList();const selZ=zn.find(z=>z.name===CO.zone)||null;
 const feeApplied=(useNew&&CO.del==='delivery')?(zn.length?(selZ?Math.max(0,+selZ.fee||0):0):Math.max(0,+shopInfo.delivery_fee||0)):0;
 const total=Math.round((cartTotal()+feeApplied)*100)/100;
-const payload={customer_name:name,phone,note,items,total};
+const payload={customer_name:name,phone,note,items,total,tenant_id:TENANT};
 if(useNew){payload.delivery=CO.del;payload.payment=CO.pay;if(CO.del==='delivery')payload.address=addr;if(feeApplied>0)payload.delivery_fee=feeApplied;if(selZ)payload.zone=selZ.name;}
 const waText='طلب جديد من '+shopInfo.shop_name+':\n'+items.map(it=>'• '+it.name+' × '+it.qty).join('\n')+'\nالإجمالي: '+fmt(total)+' جنيه'+(feeApplied>0?('\n🚚 شامل توصيل '+(selZ?selZ.name+' ':'')+fmt(feeApplied)+' جنيه'):'')+(payload.delivery?('\n'+(CO.del==='pickup'?'🏪 استلام من المحل':'🚚 دليفري — '+addr)):'')+(m?('\n💳 الدفع: '+m.t):'')+(note?'\nملاحظات: '+note:'')+'\n— '+name+(phone?' ('+phone+')':'');
 if(viaWa||DEMO){if(shopInfo.phone){let ph=String(shopInfo.phone).replace(/\D/g,'');if(ph.startsWith('0'))ph='2'+ph;
