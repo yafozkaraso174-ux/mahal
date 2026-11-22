@@ -433,7 +433,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r22';
+const APP_VER='2026-11-22r23';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -859,7 +859,9 @@ ${can('stats')?`<div class="grid2">
  <button class="act" onclick="openProductSheet()"><div class="ic" style="background:var(--red-soft);color:var(--red)">${ic('tag')}</div><div class="tx">صنف جديد</div></button>
  <button class="act" onclick="go('#/invoices')"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('receipt')}</div><div class="tx">قايمة الفواتير</div></button>
  ${can('stats')?`<button class="act" onclick="go('#/day')"><div class="ic" style="background:var(--green-soft);color:var(--green)">${ic('cash')}</div><div class="tx">كشف اليوم</div></button>
- <button class="act" onclick="go('#/expenses')"><div class="ic" style="background:var(--red-soft);color:var(--red)">${ic('down')}</div><div class="tx">المصروفات</div></button>`:''}
+ <button class="act" onclick="go('#/expenses')"><div class="ic" style="background:var(--red-soft);color:var(--red)">${ic('down')}</div><div class="tx">المصروفات</div></button>
+ <button class="act" onclick="go('#/drawer')"><div class="ic" style="background:#FDF3DC;color:#9A6A14">${ic('lock')}</div><div class="tx">الدرج</div></button>`:''}
+ ${can('invoice')?`<button class="act" onclick="go('#/services')"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${ic('phone')}</div><div class="tx">الخدمات</div></button>`:''}
 </div>
 ${SB.ready()?`<div id="shop-sec">${shopSectionHTML()}</div>`:''}
 ${low.length?`<div class="alert"><span style="color:#9A6A14">${ic('alert')}</span><div class="tx">${low.slice(0,3).map(p=>`<b>${esc(p.name)}</b> باقي منه ${fmt(p.stock)} ${esc(p.unit)}`).join(' · ')} — عاوز تطلب توريد؟</div></div>`:''}
@@ -1253,14 +1255,14 @@ function delExpense(id){if(!can('del')){toast('مش مسموح ليك تمسح �
 confirmSheet('هتمسح المصروف ده من السجل. متأكد؟','امسح المصروف',()=>{DB.expenses=DB.expenses.filter(x=>x.id!==id);save();enqueue({type:'harddel',table:'expenses',rowId:id});render();toast('اتمسح');});}
 /* ============ day close report (كشف اليوم) ============ */
 function dayCloseCalc(day){const ref=day?new Date(day):new Date();const isD=iso=>new Date(iso).toDateString()===ref.toDateString();
-let sales=0,count=0,cash=0,transfer=0,debt=0,exp=0,expCash=0,profit=0,fees=0;const byProd={};
+let sales=0,count=0,cash=0,invCash=0,payCash=0,transfer=0,debt=0,exp=0,expCash=0,profit=0,fees=0;const byProd={};
 DB.invoices.forEach(i=>{if(!isD(i.date))return;count++;sales+=i.total;
  const paidNow=Math.max((i.paid||0)-(i.creditUsed||0),0);
- if(i.payMethod==='تحويل')transfer+=paidNow;else cash+=paidNow;
+ if(i.payMethod==='تحويل')transfer+=paidNow;else{cash+=paidNow;invCash+=paidNow;}
  debt+=Math.max(i.total-i.paid,0);
  i.items.forEach(it=>{profit+=(it.price-(it.cost||0))*it.qty;const k=it.name;if(!byProd[k])byProd[k]={qty:0,unit:it.unit||''};byProd[k].qty+=it.qty;});});
 DB.payments.forEach(p=>{if(!isD(p.date)||p.kind!=='in'||p.amount<=0)return;
- if(p.method==='تحويل')transfer+=p.amount;else if(p.method!=='رصيد')cash+=p.amount;});
+ if(p.method==='تحويل')transfer+=p.amount;else if(p.method!=='رصيد'){cash+=p.amount;payCash+=p.amount;}});
 DB.expenses.forEach(x=>{if(!isD(x.date))return;exp+=x.amount;if(x.method!=='تحويل')expCash+=x.amount;});
 DB.serviceTxns.forEach(x=>{if(!isD(x.date))return;fees+=x.fee||0;});
 let ret=0;
@@ -1268,7 +1270,7 @@ DB.returns.forEach(r=>{if(!isD(r.date))return;ret+=r.total;
  if(r.refundMethod==='كاش')cash-=r.total;else if(r.refundMethod==='تحويل')transfer-=r.total;
  (r.items||[]).forEach(it=>{profit-=(it.price-(it.cost||0))*it.qty;});});
 let top=null;Object.keys(byProd).forEach(k=>{if(!top||byProd[k].qty>top.qty)top={name:k,qty:byProd[k].qty,unit:byProd[k].unit};});
-return{day:ref.toDateString(),sales,count,cash,transfer,debt,exp,expCash,profit,fees,ret,net:Math.round((profit+fees-exp)*100)/100,top};}
+return{day:ref.toDateString(),sales,count,cash,invCash,payCash,transfer,debt,exp,expCash,profit,fees,ret,net:Math.round((profit+fees-exp)*100)/100,top};}
 function dayCloseText(dc){const lines=[
 'كشف يوم '+new Date(dc.day).toLocaleDateString(AR,{weekday:'long',day:'numeric',month:'long'})+' — '+DB.settings.shopName,
 'مبيعات: '+fmt(dc.sales)+' ج ('+dc.count.toLocaleString(AR)+' فاتورة)',
@@ -1300,6 +1302,146 @@ return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin
 </div>
 <a class="btn btn-p" style="width:100%;margin-top:12px;text-decoration:none" href="https://wa.me/?text=${encodeURIComponent(dayCloseText(dc))}" target="_blank" rel="noopener">${ic('wa',18)} ابعت الكشف واتساب</a>
 </div>`+navbar('home');}
+/* ============ الدرج (drawer) ============ */
+function drawerDayKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function drawerCalc(day){const ref=day?new Date(day):new Date();const isD=iso=>new Date(iso).toDateString()===ref.toDateString();
+const todayKey=drawerDayKey(ref);
+const closes=[...DB.dayCloses].sort((a,b)=>(a.day<b.day?1:-1)||(new Date(b.closedAt||0)-new Date(a.closedAt||0)));
+const prior=closes.find(c=>c.day<todayKey);
+const opening=prior?prior.actual:0;
+const dc=dayCloseCalc(day);
+let svcIn=0,svcOut=0;
+DB.serviceTxns.forEach(x=>{if(!isD(x.date)||x.kind==='تسوية')return;
+ if(x.kind==='استقبال')svcOut+=Math.max((x.amount||0)-(x.fee||0),0);else svcIn+=(x.amount||0)+(x.fee||0);});
+let manIn=0,manOut=0;
+DB.drawer.forEach(e=>{if(!isD(e.date))return;if(e.kind==='out')manOut+=e.amount;else manIn+=e.amount;});
+const expected=Math.round((opening+dc.cash-dc.expCash+svcIn-svcOut+manIn-manOut)*100)/100;
+return{day:todayKey,opening,dc,svcIn,svcOut,manIn,manOut,expected,closedToday:closes.find(c=>c.day===todayKey)||null};}
+function vDrawer(){const cur=DB.settings.currency||'جنيه';const c=drawerCalc();const isD=iso=>new Date(iso).toDateString()===new Date().toDateString();
+const expToday=DB.expenses.filter(x=>isD(x.date)&&x.method!=='تحويل');
+const retToday=DB.returns.filter(r=>isD(r.date)&&r.refundMethod==='كاش');
+const manToday=DB.drawer.filter(e=>isD(e.date)).sort((a,b)=>new Date(a.date)-new Date(b.date));
+const invCount=DB.invoices.filter(i=>isD(i.date)&&i.payMethod!=='تحويل'&&Math.max((i.paid||0)-(i.creditUsed||0),0)>0).length;
+const payCount=DB.payments.filter(p=>isD(p.date)&&p.kind==='in'&&p.amount>0&&p.method!=='تحويل'&&p.method!=='رصيد').length;
+const closes=[...DB.dayCloses].sort((a,b)=>(a.day<b.day?1:-1)||(new Date(b.closedAt||0)-new Date(a.closedAt||0))).slice(0,7);
+const row=(icn,bg,col,label,sub,amt,sign,del)=>`<div class="row"><div class="ic" style="background:${bg};color:${col}">${icn}</div><div class="mid"><div class="t">${label}</div>${sub?`<div class="s">${sub}</div>`:''}</div><div class="end"><div class="amt" style="color:${sign<0?'var(--red)':sign>0?'var(--green)':'inherit'}">${sign<0?'−':sign>0?'+':''}${fmt(amt)} <small>ج</small></div></div>${del||''}</div>`;
+return appbar('الدرج',new Date().toLocaleDateString(AR,{weekday:'long',day:'numeric',month:'long'}),`<button class="avatar" style="background:var(--green)" onclick="openDrawerEntrySheet()">${ic('plus',22)}</button>`)+`
+<div class="content">
+<div class="stat hero" style="margin-top:8px"><div class="lbl">المفروض يكون في الدرج دلوقتي</div><div class="val">${fmt(c.expected)} <small>${cur}</small></div><div class="sub">رصيد أول اليوم + اللي دخل − اللي خرج</div></div>
+<div class="sec-title">حركة النهارده</div>
+${row('🌅','#FDF3DC','#9A6A14','رصيد أول اليوم','من آخر قفلة',c.opening,0)}
+${c.dc.invCash?row('🧾','var(--green-soft)','var(--green)','مبيعات كاش ('+invCount.toLocaleString(AR)+' فاتورة)','النهارده',c.dc.invCash,1):''}
+${c.dc.payCash?row('🤝','var(--green-soft)','var(--green)','تحصيلات كاش ('+payCount.toLocaleString(AR)+')','ديون اتقبضت النهارده',c.dc.payCash,1):''}
+${c.svcIn?row('📱','var(--blue-soft)','var(--blue)','كاش خدمات داخل','مبلغ + عمولة',c.svcIn,1):''}
+${c.svcOut?row('📲','var(--blue-soft)','var(--blue)','كاش خدمات خارج','اتدفع لعملاء استقبال',c.svcOut,-1):''}
+${expToday.map(x=>row('🏠','var(--red-soft)','var(--red)',esc(x.title),'مصروف من الدرج',x.amount,-1)).join('')}
+${retToday.map(r=>row('↩️','var(--red-soft)','var(--red)','مرتجع كاش — فاتورة #'+(r.invoiceNum||'').toLocaleString(AR),'خرج من الدرج',r.total,-1)).join('')}
+${manToday.map(e=>row(e.kind==='out'?'👤':'💵',e.kind==='out'?'var(--red-soft)':'var(--green-soft)',e.kind==='out'?'var(--red)':'var(--green)',esc(e.label||(e.kind==='out'?'سحب':'إيداع')),(e.note?esc(e.note)+' · ':'')+(e.kind==='out'?'مش مصروف — مش بيأثر في الربح':'قيد يدوي'),e.amount,e.kind==='out'?-1:1,`<button style="color:var(--muted);padding:6px" onclick="delDrawerEntry('${e.id}')">${ic('trash',18)}</button>`)).join('')}
+<button class="btn btn-o" style="width:100%;margin-top:6px" onclick="openDrawerEntrySheet()">${ic('plus',16)} سجّل كاش دخل أو خرج من الدرج</button>
+<div class="card" style="border-color:var(--green);margin-top:14px">
+<div style="font-weight:900;font-size:14.5px;text-align:center">🌙 قفلة اليوم</div>
+${c.closedToday?`<div class="note" style="text-align:center;margin-top:4px">اتقفل النهارده: الفعلي ${fmt(c.closedToday.actual)} ج${c.closedToday.diff!==0?` (فرق ${fmt(c.closedToday.diff)} ج)`:''} — تقدر تقفل تاني وآخر قفلة هي المعتمدة</div>`:''}
+<button class="btn btn-p" style="width:100%;margin-top:8px" onclick="openCloseDaySheet()">اقفل اليوم ✓</button>
+<div class="note">عدّ الكاش اللي في الدرج بإيدك واكتبه — القفلة بتتسجل بتاريخها ووقتها ولو في فرق بيفضل محفوظ تعرف ترجعله</div>
+</div>
+${closes.length?`<div class="sec-title">قفلات سابقة</div>${closes.map(cl=>`<div class="row"><div class="ic" style="background:var(--green-soft);color:var(--green)">🌙</div><div class="mid"><div class="t">${new Date(cl.day+'T00:00:00').toLocaleDateString(AR,{weekday:'long',day:'numeric',month:'numeric'})}</div><div class="s">متوقع ${fmt(cl.expected)} · فعلي ${fmt(cl.actual)}</div></div><div class="end"><div class="amt" style="color:${cl.diff<0?'var(--red)':cl.diff>0?'#9A6A14':'var(--green)'}">${cl.diff===0?'مظبوط ✓':(cl.diff>0?'+':'')+fmt(cl.diff)}</div></div></div>`).join('')}`:''}
+</div>`+navbar('home');}
+function openDrawerEntrySheet(){sheet('كاش الدرج',`
+<div class="field"><div class="lbl">نوع القيد</div><div class="seg" id="dr-kind">
+<button class="on" data-v="out" onclick="segPick(this)">سحب من الدرج 👤</button>
+<button data-v="in" onclick="segPick(this)">إيداع في الدرج 💵</button></div></div>
+<div class="field"><div class="lbl">البيان</div><div class="seg" id="dr-label" style="flex-wrap:wrap">
+<button class="on" data-v="سحب صاحب المحل" onclick="segPick(this);drPreset()">صاحب المحل</button>
+<button data-v="يومية / أجر" onclick="segPick(this);drPreset()">يومية</button>
+<button data-v="تغيير رصيد افتتاحي" onclick="segPick(this);drPreset()">رصيد افتتاحي</button>
+<button data-v="" onclick="segPick(this);drPreset()">أخرى</button></div></div>
+<div class="field" id="dr-custom-wrap" style="display:none"><div class="lbl">اكتب البيان</div><input id="dr-custom"></div>
+<div class="field"><div class="lbl">المبلغ</div><input id="dr-amt" inputmode="decimal" placeholder="٠"></div>
+<div class="field"><div class="lbl">ملحوظة (اختياري)</div><input id="dr-note"></div>
+<button class="btn btn-p" style="width:100%" onclick="saveDrawerEntry()">سجّل القيد ✓</button>
+<div class="note" style="margin-top:8px">سحب صاحب المحل بيأثر على كاش الدرج بس — مش مصروف ومش بينقص الربح.</div>`);
+setTimeout(()=>$('#dr-amt')?.focus(),60);}
+function drPreset(){const lbl=$('#dr-label button.on');const w=$('#dr-custom-wrap');if(w)w.style.display=lbl&&!lbl.dataset.v?'block':'none';}
+function saveDrawerEntry(){const kind=$('#dr-kind button.on')?.dataset.v||'out';
+const lblBtn=$('#dr-label button.on');let label=lblBtn?lblBtn.dataset.v:'';
+if(!label){label=($('#dr-custom')?.value||'').trim();}
+if(!label){toast('اختار أو اكتب البيان');return;}
+const amt=num($('#dr-amt')?.value);if(amt<=0){toast('اكتب المبلغ');return;}
+const x={id:uid(),date:new Date().toISOString(),kind,label,amount:amt,note:($('#dr-note')?.value||'').trim()};
+DB.drawer.push(x);save();enqueue({type:'drawer',table:'drawer_entries',rowId:x.id,payload:x});
+closeSheet();render();toast(kind==='out'?'اتسجل السحب ✓':'اتسجل الإيداع ✓');}
+function delDrawerEntry(id){if(!can('del')){toast('مش مسموح ليك تمسح — كلم صاحب المحل');return;}
+confirmSheet('هتمسح القيد ده من الدرج. متأكد؟','امسح القيد',()=>{DB.drawer=DB.drawer.filter(x=>x.id!==id);save();enqueue({type:'harddel',table:'drawer_entries',rowId:id});render();toast('اتمسح');});}
+function openCloseDaySheet(){const c=drawerCalc();sheet('🌙 قفلة اليوم',`
+<div class="note" style="margin-bottom:8px">عدّ الكاش اللي في الدرج بإيدك واكتبه هنا</div>
+<div class="field"><div class="lbl">الكاش الفعلي في الدرج</div><input id="cd-actual" inputmode="decimal" value="${c.expected}" oninput="cdDiff()"></div>
+<div class="trow" style="margin-top:6px"><span class="k">المفروض</span><b>${fmt(c.expected)} ج</b></div>
+<div class="trow"><span class="k">الفرق</span><b id="cd-diff" style="color:var(--green)">مظبوط ✓</b></div>
+<div class="field" style="margin-top:8px"><div class="lbl">ملحوظة (اختياري)</div><input id="cd-note" placeholder="مثلا: ناقص ٣٠ مش عارف ليه"></div>
+<button class="btn btn-p" style="width:100%" onclick="doCloseDay()">اقفل اليوم ✓</button>`);}
+function cdDiff(){const c=drawerCalc();const a=num($('#cd-actual')?.value);const d=Math.round((a-c.expected)*100)/100;const el=$('#cd-diff');if(!el)return;
+if(d===0){el.style.color='var(--green)';el.textContent='مظبوط ✓';}
+else if(d<0){el.style.color='var(--red)';el.textContent='ناقص '+fmt(-d)+' ج ⚠️';}
+else{el.style.color='#9A6A14';el.textContent='زيادة '+fmt(d)+' ج';}}
+function doCloseDay(){const c=drawerCalc();const raw=($('#cd-actual')?.value||'').trim();if(!raw){toast('اكتب الكاش الفعلي');return;}
+const a=num(raw);const diff=Math.round((a-c.expected)*100)/100;
+const x={id:uid(),day:c.day,closedAt:new Date().toISOString(),opening:c.opening,expected:c.expected,actual:a,diff,note:($('#cd-note')?.value||'').trim(),
+payload:{sales:c.dc.sales,count:c.dc.count,cash:c.dc.cash,transfer:c.dc.transfer,debt:c.dc.debt,exp:c.dc.exp,fees:c.dc.fees,ret:c.dc.ret,net:c.dc.net}};
+DB.dayCloses.push(x);save();enqueue({type:'closeDay',table:'day_closes',rowId:x.id,payload:x});
+closeSheet();render();toast(diff===0?'اليوم اتقفل مظبوط ✓':'اليوم اتقفل — الفرق متسجل');}
+/* ============ الخدمات (agent services) ============ */
+const SVC_KINDS=['فودافون كاش','انستاباي','كارت شحن','شحن رصيد','أخرى'];
+function floatBalance(){let f=0;DB.serviceTxns.forEach(x=>{if(x.kind==='إرسال')f-=x.amount||0;else f+=x.amount||0;});return Math.round(f*100)/100;}
+function vServices(){const cur=DB.settings.currency||'جنيه';const isD=iso=>new Date(iso).toDateString()===new Date().toDateString();
+const today=DB.serviceTxns.filter(x=>isD(x.date)&&x.kind!=='تسوية').sort((a,b)=>new Date(b.date)-new Date(a.date));
+const feesToday=today.reduce((s,x)=>s+(x.fee||0),0);
+const t=totals();const fl=floatBalance();
+const svcEmoji=x=>x.kind==='استقبال'?'📲':(x.service==='كارت شحن'?'💳':'📱');
+return appbar('خدمات فودافون كاش والشحن',new Date().toLocaleDateString(AR,{weekday:'long',day:'numeric',month:'long'}),`<button class="avatar" style="background:var(--blue)" onclick="openServiceSheet()">${ic('plus',22)}</button>`)+`
+<div class="content">
+<div class="stat hero" style="margin-top:8px"><div class="lbl">عمولات النهارده</div><div class="val">${fmt(feesToday)} <small>${cur}</small></div><div class="sub">دخل صافي للمحل — بيتسجل في الربح وكشف اليوم${t.feeMonth?` · الشهر ده ${fmt(t.feeMonth)} ج`:''}</div></div>
+<div class="sec-title">عمليات النهارده</div>
+${today.length?today.map(x=>`<div class="row"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${svcEmoji(x)}</div><div class="mid"><div class="t">${esc(x.kind)} ${esc(x.service)} ${fmt(x.amount)} ج</div><div class="s">${relDate(x.date)}${x.customerName?' · '+esc(x.customerName):''}${x.note?' · '+esc(x.note):''}</div></div><div class="end"><div class="amt" style="color:var(--green)">+${fmt(x.fee)} <small>ج عمولة</small></div></div><button style="color:var(--muted);padding:6px" onclick="delService('${x.id}')">${ic('trash',18)}</button></div>`).join(''):`<div class="empty"><div class="big">مفيش عمليات النهارده</div>سجّل أول عملية من الزرار اللي فوق</div>`}
+<button class="btn btn-p" style="width:100%;margin-top:6px" onclick="openServiceSheet()">${ic('plus',16)} عملية جديدة (تحويل / كارت / شحن رصيد)</button>
+<div class="card" style="margin-top:14px">
+<div class="trow" style="padding:8px 2px"><span class="k">رصيد الفلوت (فلوس الشبكة)</span><b style="font-size:16px">${fmt(fl)} ج</b></div>
+<button class="btn btn-o" style="width:100%;margin-top:4px" onclick="openFloatAdjust()">سوّي رصيد الفلوت</button>
+</div>
+<div class="alert" style="margin-top:12px"><span style="color:#9A6A14">${ic('alert')}</span><div class="tx">أصل المبلغ مش دخل المحل — بيعدّي بس. اللي بيتسجل دخل هو العمولة. كاش الإرسال (المبلغ + العمولة) بيدخل الدرج لوحده، وكاش الاستقبال بيخرج منه، والفلوت بيتحرك بنفس المبلغ.</div></div>
+</div>`+navbar('home');}
+function openServiceSheet(){sheet('عملية جديدة',`
+<div class="field"><div class="lbl">نوع العملية</div><div class="seg" id="sv-kind">
+<button class="on" data-v="إرسال" onclick="segPick(this);svcHint()">إرسال / شحن 📱</button>
+<button data-v="استقبال" onclick="segPick(this);svcHint()">استقبال تحويل 📲</button></div></div>
+<div class="field"><div class="lbl">الخدمة</div><div class="seg" id="sv-service" style="flex-wrap:wrap">
+${SVC_KINDS.map((s,i)=>`<button${i===0?' class="on"':''} data-v="${s}" onclick="segPick(this)">${s}</button>`).join('')}</div></div>
+<div class="field"><div class="lbl">المبلغ</div><input id="sv-amt" inputmode="decimal" placeholder="٠" oninput="svcHint()"></div>
+<div class="field"><div class="lbl">العمولة (اللي بيكسبها المحل)</div><input id="sv-fee" inputmode="decimal" placeholder="٠" oninput="svcHint()"></div>
+<div class="field"><div class="lbl">اسم العميل / رقمه (اختياري)</div><input id="sv-cust"></div>
+<div class="note" id="sv-hint" style="margin:2px 0 8px"></div>
+<button class="btn btn-p" style="width:100%" onclick="saveService()">سجّل العملية ✓</button>`);
+svcHint();setTimeout(()=>$('#sv-amt')?.focus(),60);}
+function svcHint(){const k=$('#sv-kind button.on')?.dataset.v||'إرسال';const a=num($('#sv-amt')?.value),f=num($('#sv-fee')?.value);const el=$('#sv-hint');if(!el)return;
+if(a<=0){el.textContent='';return;}
+el.textContent=k==='استقبال'?('العميل بيبعت '+fmt(a)+' ج على الشبكة — هتديله كاش '+fmt(Math.max(a-f,0))+' ج من الدرج، والفلوت بيزيد '+fmt(a)+' ج'):('العميل بيدفع '+fmt(a+f)+' ج كاش بيدخلوا الدرج — والفلوت بينقص '+fmt(a)+' ج');}
+function saveService(){const kind=$('#sv-kind button.on')?.dataset.v||'إرسال';const service=$('#sv-service button.on')?.dataset.v||'أخرى';
+const amount=num($('#sv-amt')?.value),fee=num($('#sv-fee')?.value);
+if(amount<=0){toast('اكتب المبلغ');return;}
+if(fee<0){toast('العمولة مش ممكن تكون بالسالب');return;}
+const x={id:uid(),date:new Date().toISOString(),kind,service,amount,fee,customerName:($('#sv-cust')?.value||'').trim(),note:''};
+DB.serviceTxns.push(x);save();enqueue({type:'service',table:'service_txns',rowId:x.id,payload:x});
+closeSheet();render();toast('العملية اتسجلت ✓');}
+function delService(id){if(!can('del')){toast('مش مسموح ليك تمسح — كلم صاحب المحل');return;}
+confirmSheet('هتمسح العملية دي — الفلوت والعمولات هيتحسبوا من غيرها. متأكد؟','امسح العملية',()=>{DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!==id);save();enqueue({type:'harddel',table:'service_txns',rowId:id});render();toast('اتمسح');});}
+function openFloatAdjust(){const fl=floatBalance();sheet('سوّي رصيد الفلوت',`
+<div class="note" style="margin-bottom:8px">الرصيد المتسجل دلوقتي ${fmt(fl)} ج — افتح تطبيق الشبكة وشوف الرصيد الحقيقي واكتبه هنا</div>
+<div class="field"><div class="lbl">الرصيد الحقيقي</div><input id="fl-actual" inputmode="decimal" value="${fl}"></div>
+<button class="btn btn-p" style="width:100%" onclick="saveFloatAdjust()">سوّي الرصيد ✓</button>`);}
+function saveFloatAdjust(){const fl=floatBalance();const a=num($('#fl-actual')?.value);const diff=Math.round((a-fl)*100)/100;
+if(diff===0){closeSheet();toast('الرصيد مظبوط ✓');return;}
+const x={id:uid(),date:new Date().toISOString(),kind:'تسوية',service:'',amount:diff,fee:0,customerName:'',note:'تسوية رصيد الفلوت'};
+DB.serviceTxns.push(x);save();enqueue({type:'service',table:'service_txns',rowId:x.id,payload:x});
+closeSheet();render();toast('الرصيد اتعدل ✓');}
 /* ============ product / party sheets ============ */
 function openProductSheet(pid,fromPur){const p=pid?prod(pid):null;
 pendingPhoto=null;
@@ -1491,6 +1633,8 @@ else if(h.startsWith('#/purchase/')){html=can('suppliers')?vPurchase(h.split('/'
 else if(h==='#/settings'){html=vSettings();}
 else if(h==='#/expenses'){html=can('stats')?vExpenses():vNoPerm();}
 else if(h==='#/day'){html=can('stats')?vDayClose():vNoPerm();}
+else if(h==='#/drawer'){html=can('stats')?vDrawer():vNoPerm();}
+else if(h==='#/services'){html=can('invoice')?vServices():vNoPerm();}
 else if(h==='#/orders'){html=can('orders')?vOrders():vNoPerm();}
 else if(h==='#/users'){html=vUsers();}
 else{html=vDash();}

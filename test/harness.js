@@ -398,6 +398,67 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  const cv=ev(`invoiceCanvas(DB.invoices.find(i=>i.num===1001))`);
  t('invoice canvas sized',!!cv&&cv.width===820&&cv.height>400);
 
+ /* ---- stage 4: drawer + services ---- */
+ const D='2020-02-20',DZ=D+'T00:00:00.000Z';
+ ev(`DB.dayCloses.push({id:'dc0',day:'2020-02-19',closedAt:'2020-02-19T21:00:00.000Z',opening:0,expected:1000,actual:990,diff:-10,payload:{},note:''})`);
+ ev(`DB.invoices.push({id:'di1',num:4001,date:'${D}T10:00:00.000Z',customerId:'',priceType:'w',items:[{productId:'p1',name:'سكر',unit:'كيلو',qty:2,price:50,cost:40}],total:100,paid:100,creditUsed:0,payMethod:'كاش'})`);
+ ev(`DB.invoices.push({id:'di2',num:4002,date:'${D}T10:30:00.000Z',customerId:'',priceType:'w',items:[],total:200,paid:200,creditUsed:0,payMethod:'تحويل'})`);
+ ev(`DB.payments.push({id:'dp1',kind:'in',amount:50,method:'كاش',date:'${D}T11:00:00.000Z',customerId:'c1',note:''})`);
+ ev(`DB.expenses.push({id:'de1',date:'${D}T12:00:00.000Z',title:'نقل',amount:30,method:'كاش',note:''})`);
+ ev(`DB.returns.push({id:'drr1',num:9,date:'${D}T13:00:00.000Z',invoiceId:'di1',invoiceNum:4001,customerId:'',items:[{productId:'p1',name:'سكر',unit:'كيلو',qty:1,price:50,cost:40}],total:50,refundMethod:'كاش',note:''})`);
+ const flBase=ev('floatBalance()');
+ ev(`DB.serviceTxns.push({id:'ds1',date:'${D}T14:00:00.000Z',kind:'إرسال',service:'فودافون كاش',amount:1000,fee:10,customerName:'',note:''})`);
+ ev(`DB.serviceTxns.push({id:'ds2',date:'${D}T15:00:00.000Z',kind:'استقبال',service:'فودافون كاش',amount:500,fee:15,customerName:'',note:''})`);
+ ev(`DB.drawer.push({id:'dm1',date:'${D}T16:00:00.000Z',kind:'in',label:'إيداع صاحب المحل',amount:200,note:''})`);
+ ev(`DB.drawer.push({id:'dm2',date:'${D}T17:00:00.000Z',kind:'out',label:'سحب صاحب المحل',amount:100,note:''})`);
+ const dc3=ev(`dayCloseCalc('${DZ}')`);
+ t('dayClose invCash split',dc3.invCash===100,'invCash='+dc3.invCash);
+ t('dayClose payCash split',dc3.payCash===50,'payCash='+dc3.payCash);
+ const dr=ev(`drawerCalc('${DZ}')`);
+ t('drawer opening from last close actual',dr.opening===990,'opening='+dr.opening);
+ t('drawer service cash in (amount+fee)',dr.svcIn===1010,'svcIn='+dr.svcIn);
+ t('drawer service cash out (amount-fee)',dr.svcOut===485,'svcOut='+dr.svcOut);
+ t('drawer expected math',dr.expected===1685,'expected='+dr.expected);
+ ev(`DB.dayCloses.push({id:'dc1',day:'${D}',closedAt:'${D}T22:00:00.000Z',opening:990,expected:1685,actual:1680,diff:-5,payload:{},note:''})`);
+ t('drawer closedToday visible',ev(`drawerCalc('${DZ}').closedToday.actual`)===1680);
+ t('next day opening = today actual',ev(`drawerCalc('2020-02-21T00:00:00.000Z').opening`)===1680);
+ t('float balance simple',ev('floatBalance()')===flBase-500,'float='+ev('floatBalance()')+' base='+flBase);
+ ev(`DB.serviceTxns.push({id:'ds3',date:'${D}T18:00:00.000Z',kind:'تسوية',service:'',amount:1500,fee:0,customerName:'',note:'تسوية رصيد الفلوت'})`);
+ t('float adjust via تسوية',ev('floatBalance()')===flBase+1000,'float='+ev('floatBalance()'));
+ t('تسوية does not hit drawer',ev(`drawerCalc('${DZ}').expected`)===1685);
+ /* service sheet e2e */
+ ev('openServiceSheet()');
+ ev(`$('#sv-amt').value='100';$('#sv-fee').value='5'`);
+ const svcN=ev('DB.serviceTxns.length');
+ ev('saveService()');
+ t('saveService appends txn',ev('DB.serviceTxns.length')===svcN+1);
+ const lastSvc=ev('DB.serviceTxns[DB.serviceTxns.length-1]');
+ t('saveService fields',lastSvc.kind==='إرسال'&&lastSvc.amount===100&&lastSvc.fee===5&&lastSvc.service==='فودافون كاش');
+ ev(`DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!=='${lastSvc.id}')`);
+ t('svcHint send text',(()=>{ev(`openServiceSheet();$('#sv-amt').value='100';$('#sv-fee').value='5';svcHint()`);const ok=ev(`$('#sv-hint').textContent.includes(fmt(105))&&$('#sv-hint').textContent.includes('الدرج')`);ev('closeSheet()');return ok;})());
+ /* drawer entry sheet e2e */
+ ev('openDrawerEntrySheet()');
+ ev(`$('#dr-amt').value='75'`);
+ const drN=ev('DB.drawer.length');
+ ev('saveDrawerEntry()');
+ t('saveDrawerEntry appends manual entry',ev('DB.drawer.length')===drN+1);
+ const lastDr=ev('DB.drawer[DB.drawer.length-1]');
+ t('drawer entry defaults owner-withdrawal',lastDr.kind==='out'&&lastDr.label==='سحب صاحب المحل'&&lastDr.amount===75);
+ ev(`DB.drawer=DB.drawer.filter(x=>x.id!=='${lastDr.id}')`);
+ /* close day record shape */
+ ev(`openCloseDaySheet();$('#cd-actual').value='1680';$('#cd-note').value=''`);
+ const clN=ev('DB.dayCloses.length');
+ ev('doCloseDay()');
+ t('doCloseDay appends close',ev('DB.dayCloses.length')===clN+1);
+ const lastCl=ev('DB.dayCloses[DB.dayCloses.length-1]');
+ t('close diff = actual - expected',lastCl.diff===Math.round((lastCl.actual-lastCl.expected)*100)/100);
+ t('close payload snapshot',typeof lastCl.payload.sales==='number'&&typeof lastCl.payload.net==='number');
+ ev(`DB.dayCloses=DB.dayCloses.filter(x=>x.id!=='${lastCl.id}')`);
+ /* views render */
+ t('vDrawer renders',ev('vDrawer()').includes('المفروض يكون في الدرج'));
+ t('vServices renders',ev('vServices()').includes('عمولات النهارده'));
+ t('dash has drawer+services buttons',ev('vDash()').includes("#/drawer")&&ev('vDash()').includes("#/services"));
+
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
  process.exit(0);
