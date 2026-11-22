@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "jsdom": "^31.0.1"
+    "@electric-sql/pglite": "^0.5.17",
+    "jsdom": "^31.0.1",
+    "puppeteer-core": "^25.18.1"
   }
 }

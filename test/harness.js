@@ -13,7 +13,7 @@ function eq(a,b){return JSON.stringify(a)===JSON.stringify(b);}
 
 /* ---------- mock supabase ---------- */
 function makeMock(){
- const tables={products:[],customers:[],suppliers:[],invoices:[],purchases:[],payments:[],movements:[],shop_users:[],backups:[],orders:[],shop_info:[],sales_returns:[],expenses:[],drawer_entries:[],day_closes:[],service_txns:[]};
+ const tables={offers:[],products:[],customers:[],suppliers:[],invoices:[],purchases:[],payments:[],movements:[],shop_users:[],backups:[],orders:[],shop_info:[],sales_returns:[],expenses:[],drawer_entries:[],day_closes:[],service_txns:[]};
  let counter=1000;
  const json=(st,obj)=>({ok:st>=200&&st<300,status:st,headers:{get:()=>null},text:async()=>obj===undefined?'':JSON.stringify(obj),json:async()=>obj});
  function rows(table){return tables[table]||(tables[table]=[]);}

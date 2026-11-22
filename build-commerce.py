@@ -1,0 +1,3 @@
+from pathlib import Path
+r=Path(__file__).resolve().parent;p=r/'index.html';s=p.read_text();a=s.index('/* @mobmod */');b=s.index('</script>',a);s=s[:a]+'/* @mobmod */\n'+(r/'mobmod.src.js').read_text()+'\n/* @commerce */\n'+(r/'commerce-core.src.js').read_text()+'\n'+(r/'commerce.src.js').read_text()+'\n'+s[b:];p.write_text(s)
+p=r/'store.html';s=p.read_text();a=s.index('/* @store-commerce */');b=s.index('loadStore();\n</script>',a);s=s[:a]+'/* @store-commerce */\n'+(r/'commerce-core.src.js').read_text()+'\n'+(r/'store-commerce.src.js').read_text()+'\n'+s[b:];p.write_text(s)
