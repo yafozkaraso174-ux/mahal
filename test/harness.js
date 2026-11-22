@@ -13,7 +13,7 @@ function eq(a,b){return JSON.stringify(a)===JSON.stringify(b);}
 
 /* ---------- mock supabase ---------- */
 function makeMock(){
- const tables={products:[],customers:[],suppliers:[],invoices:[],purchases:[],payments:[],movements:[],shop_users:[],backups:[],orders:[],shop_info:[]};
+ const tables={products:[],customers:[],suppliers:[],invoices:[],purchases:[],payments:[],movements:[],shop_users:[],backups:[],orders:[],shop_info:[],sales_returns:[],expenses:[],drawer_entries:[],day_closes:[],service_txns:[]};
  let counter=1000;
  const json=(st,obj)=>({ok:st>=200&&st<300,status:st,headers:{get:()=>null},text:async()=>obj===undefined?'':JSON.stringify(obj),json:async()=>obj});
  function rows(table){return tables[table]||(tables[table]=[]);}
@@ -48,7 +48,7 @@ function makeMock(){
      pr.stock=Math.round((pr.stock-it.qty)*100)/100;
      tables.movements.push({id:it.moveId,pid:it.productId,kind:it.moveKind||'sale',qty:-it.qty,qty_before:pr.stock+it.qty,qty_after:pr.stock,ref:'فاتورة #'+p.num,date:p.date,inserted_at:new Date().toISOString()});}
     const num=p.num||++counter;counter=Math.max(counter,num);
-    tables.invoices.push({id:p.id,num,date:p.date,customer_id:p.customerId,price_type:p.priceType,items:p.items,disc_pct:p.discPct||0,tax_pct:p.taxPct||0,disc_amt:p.discAmt||0,tax_amt:p.taxAmt||0,delivery_fee:p.deliveryFee||0,total:p.total,paid:p.paid,credit_used:p.creditUsed||0,updated_at:new Date().toISOString()});
+    tables.invoices.push({id:p.id,num,date:p.date,customer_id:p.customerId,price_type:p.priceType,items:p.items,disc_pct:p.discPct||0,tax_pct:p.taxPct||0,disc_amt:p.discAmt||0,tax_amt:p.taxAmt||0,delivery_fee:p.deliveryFee||0,total:p.total,paid:p.paid,credit_used:p.creditUsed||0,pay_method:p.payMethod||'كاش',updated_at:new Date().toISOString()});
     if(p.creditPaymentId)tables.payments.push({id:p.creditPaymentId,date:p.date,kind:'in',party_type:'c',party_id:p.customerId,amount:-(p.creditUsed||0),note:'رصيد',inserted_at:new Date().toISOString()});
     return json(200,{id:p.id,num});}
    if(name==='save_purchase'){const p=body.p;
@@ -59,7 +59,29 @@ function makeMock(){
     tables.purchases.push({id:p.id,date:p.date,supplier_id:p.supplierId,items:p.items,total:p.total,paid:p.paid,updated_at:new Date().toISOString()});
     return json(200,{id:p.id});}
    if(name==='record_payment'){const p=body.p;
-    tables.payments.push({id:p.id,date:p.date,kind:p.kind,party_type:p.partyType,party_id:p.partyId,amount:p.amount,note:p.note||'',inserted_at:new Date().toISOString()});
+    tables.payments.push({id:p.id,date:p.date,kind:p.kind,party_type:p.partyType,party_id:p.partyId,amount:p.amount,note:p.note||'',method:p.method||'كاش',inserted_at:new Date().toISOString()});
+    return json(200,{id:p.id});}
+   if(name==='next_return_num')return json(200,++counter);
+   if(name==='save_return'){const p=body.p;
+    if(tables.sales_returns.some(x=>x.id===p.id))return json(200,{id:p.id,num:tables.sales_returns.find(x=>x.id===p.id).num});
+    for(const it of (p.items||[])){const pr=tables.products.find(x=>x.id===it.productId);
+     if(pr){pr.stock=Math.round((pr.stock+it.qty)*100)/100;
+      tables.movements.push({id:it.moveId||('rm'+it.productId),pid:it.productId,kind:'return',qty:it.qty,qty_before:pr.stock-it.qty,qty_after:pr.stock,ref:'مرتجع',date:p.date,inserted_at:new Date().toISOString()});}}
+    const num=++counter;
+    tables.sales_returns.push({id:p.id,num,date:p.date,invoice_id:p.invoiceId||null,invoice_num:p.invoiceNum||null,customer_id:p.customerId||null,items:p.items||[],total:p.total||0,refund_method:p.refundMethod||'كاش',note:p.note||'',updated_at:new Date().toISOString()});
+    if(p.refundMethod==='رصيد'&&p.customerId)tables.payments.push({id:p.creditPaymentId||('cp'+p.id),date:p.date,kind:'in',party_type:'c',party_id:p.customerId,amount:-(p.total||0),note:'رصيد مرتجع',method:'رصيد',inserted_at:new Date().toISOString()});
+    return json(200,{id:p.id,num});}
+   if(name==='save_expense'){const p=body.p;
+    tables.expenses.push({id:p.id,date:p.date,title:p.title||'',amount:p.amount||0,method:p.method||'كاش',note:p.note||'',updated_at:new Date().toISOString()});
+    return json(200,{id:p.id});}
+   if(name==='save_drawer_entry'){const p=body.p;
+    tables.drawer_entries.push({id:p.id,date:p.date,kind:p.kind||'in',label:p.label||'',amount:p.amount||0,note:p.note||'',updated_at:new Date().toISOString()});
+    return json(200,{id:p.id});}
+   if(name==='close_day'){const p=body.p;
+    tables.day_closes.push({id:p.id,day:p.day,closed_at:new Date().toISOString(),opening:p.opening||0,expected:p.expected||0,actual:p.actual||0,diff:p.diff||0,payload:p.payload||{},note:p.note||''});
+    return json(200,{id:p.id});}
+   if(name==='save_service_txn'){const p=body.p;
+    tables.service_txns.push({id:p.id,date:p.date,kind:p.kind||'تحويل',service:p.service||'',amount:p.amount||0,fee:p.fee||0,customer_name:p.customerName||'',note:p.note||'',updated_at:new Date().toISOString()});
     return json(200,{id:p.id});}
    return json(404,{message:'unknown rpc'});
   }
@@ -183,12 +205,14 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('server purchase stock',mock.tables.products.find(p=>p.id==='p2').stock===15&&mock.tables.products.find(p=>p.id==='p2').cost===33);
 
  /* 5. payment write path */
- w.document.body.insertAdjacentHTML('beforeend','<select id="pay-party"><option value="c1" selected>c1</option></select><input id="pay-amt" value="50"><input id="pay-note" value="نقدي">');
+ w.document.body.insertAdjacentHTML('beforeend','<select id="pay-party"><option value="c1" selected>c1</option></select><input id="pay-amt" value="50"><input id="pay-note" value="نقدي"><div id="pay-method"><button class="on" data-v="كاش"></button><button data-v="تحويل"></button></div>');
  ev(`savePayment('in')`);
  await sleep(30);
  t('payment saved locally',ev('DB.payments.length')===1&&ev('DB.payments[0].amount')===50&&ev('DB.payments[0].kind')==='in');
+ t('payment defaults to cash method',ev('DB.payments[0].method')==='كاش');
  await ev('flushOutbox()');await sleep(20);
  t('server has payment',mock.tables.payments.length===1&&mock.tables.payments[0].amount===50);
+ t('server payment has method',mock.tables.payments[0].method==='كاش');
 
  /* 6. pullDelta merges server changes */
  mock.tables.products.push({id:'p9',name:'زيت',cat:'بقالة',unit:'زجاجة',price:90,wprice:85,cost:80,stock:20,lowat:3,deleted:false,updated_at:new Date(Date.now()+1000).toISOString()});
@@ -273,6 +297,53 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('fresh pull brings server product',!!ev(`DB.products.find(p=>p.id==='p1')`));
  t('fresh pull sets nextNum from counter',ev('DB.nextNum')>1001);
  t('sync2 populated after fresh pull',!!w.localStorage.getItem('mahal_sync2_v1'));
+
+ /* 16. stage-2: method roundtrips + expenses + day-close calc */
+ t('ENT invoice carries payMethod',ENT.invoices.map({id:'i9',num:9,date:nowIso,customerId:'c1',priceType:'w',items:[],total:10,paid:10,payMethod:'تحويل'}).pay_method==='تحويل');
+ t('ENT invoice unmap payMethod',ENT.invoices.unmap({id:'i9',num:9,date:nowIso,customer_id:'c1',price_type:'w',items:[],total:10,paid:10,pay_method:'تحويل'}).payMethod==='تحويل');
+ t('ENT payment carries method',ENT.payments.map({id:'y9',date:nowIso,kind:'in',partyType:'c',partyId:'c1',amount:5,method:'تحويل'}).method==='تحويل');
+ t('ENT expenses roundtrip',(r=>r&&r.title==='إيجار'&&r.amount===150&&r.method==='كاش')(ENT.expenses.unmap(ENT.expenses.map({id:'e0',date:nowIso,title:'إيجار',amount:150,method:'كاش',note:''}))));
+ t('ENT returns roundtrip',(r=>r&&r.num===3&&r.refundMethod==='رصيد'&&r.total===60)(ENT.returns.unmap(ENT.returns.map({id:'r0',num:3,date:nowIso,invoiceId:'i1',invoiceNum:1001,customerId:'c1',items:[],total:60,refundMethod:'رصيد',note:''}))));
+ t('ENT serviceTxns roundtrip',(r=>r&&r.kind==='تحويل'&&r.amount===1000&&r.fee===10)(ENT.serviceTxns.unmap(ENT.serviceTxns.map({id:'st0',date:nowIso,kind:'تحويل',service:'فودافون كاش',amount:1000,fee:10,customerName:'',note:''}))));
+ t('ENT drawer roundtrip',(r=>r&&r.kind==='out'&&r.amount===200)(ENT.drawer.unmap(ENT.drawer.map({id:'d0',date:nowIso,kind:'out',label:'سحب صاحب المحل',amount:200,note:''}))));
+ t('ENT dayCloses roundtrip',(r=>r&&r.expected===1850&&r.diff===-30)(ENT.dayCloses.unmap(ENT.dayCloses.map({id:'dc0',day:'2026-11-22',closedAt:nowIso,opening:1000,expected:1850,actual:1820,diff:-30,payload:{},note:''}))));
+
+ /* invoice with تحويل method reaches server */
+ ev(`invDraft={customerId:'c1',priceType:'w',items:[{productId:'p2',name:'أرز',unit:'كيلو',qty:1,price:36,cost:33}],paid:'36',disc:'',tax:'',useCredit:true,payMethod:'تحويل'}`);
+ ev('saveInvoice(false)');
+ await sleep(30);
+ const invT=ev('DB.invoices[DB.invoices.length-1]');
+ t('local invoice has payMethod',invT&&invT.payMethod==='تحويل');
+ await ev('flushOutbox()');await sleep(20);
+ const srvT=mock.tables.invoices.find(i=>i.id===invT.id);
+ t('server invoice has pay_method',srvT&&srvT.pay_method==='تحويل');
+
+ /* expense write path */
+ w.document.body.insertAdjacentHTML('beforeend','<input id="ex-title" value="إيجار المحل"><input id="ex-amt" value="150"><div id="ex-method"><button class="on" data-v="كاش"></button><button data-v="تحويل"></button></div><input id="ex-note" value="">');
+ ev('saveExpense()');
+ await sleep(30);
+ t('expense saved locally',ev('DB.expenses.length')===1&&ev('DB.expenses[0].amount')===150&&ev('DB.expenses[0].method')==='كاش');
+ await ev('flushOutbox()');await sleep(20);
+ t('server has expense',mock.tables.expenses.length===1&&mock.tables.expenses[0].amount===150);
+
+ /* dayCloseCalc on isolated day */
+ ev(`DB.invoices.push({id:'dz1',num:2001,date:'2020-01-15T10:00:00.000Z',customerId:'c1',priceType:'w',items:[{productId:'p1',name:'سكر',unit:'كيلو',qty:2,price:30,cost:25}],total:60,paid:60,creditUsed:0,payMethod:'كاش'});
+      DB.invoices.push({id:'dz2',num:2002,date:'2020-01-15T11:00:00.000Z',customerId:'c1',priceType:'w',items:[{productId:'p2',name:'أرز',unit:'كيلو',qty:1,price:40,cost:33}],total:40,paid:20,creditUsed:0,payMethod:'تحويل'});
+      DB.payments.push({id:'dz3',date:'2020-01-15T12:00:00.000Z',kind:'in',partyType:'c',partyId:'c1',amount:15,note:'',method:'كاش'});
+      DB.payments.push({id:'dz4',date:'2020-01-15T12:30:00.000Z',kind:'in',partyType:'c',partyId:'c1',amount:-5,note:'رصيد',method:'رصيد'});
+      DB.expenses.push({id:'dz5',date:'2020-01-15T13:00:00.000Z',title:'نقل',amount:10,method:'كاش',note:''});
+      DB.serviceTxns.push({id:'dz6',date:'2020-01-15T14:00:00.000Z',kind:'تحويل',service:'فودافون كاش',amount:1000,fee:10,customerName:'',note:''});`);
+ const dc=ev(`dayCloseCalc('2020-01-15T00:00:00.000Z')`);
+ t('dayClose sales+count',dc.sales===100&&dc.count===2,'sales='+dc.sales);
+ t('dayClose cash split',dc.cash===75,'cash='+dc.cash);
+ t('dayClose transfer split',dc.transfer===20,'transfer='+dc.transfer);
+ t('dayClose excludes credit payments',dc.cash===75&&dc.transfer===20);
+ t('dayClose debt',dc.debt===20,'debt='+dc.debt);
+ t('dayClose expenses',dc.exp===10&&dc.expCash===10);
+ t('dayClose profit',dc.profit===(2*(30-25)+(40-33)),'profit='+dc.profit);
+ t('dayClose net = profit + fees - exp',dc.net===(17+10-10),'net='+dc.net);
+ t('dayClose top product',dc.top&&dc.top.name==='سكر'&&dc.top.qty===2);
+ t('dayCloseText contains shop name',ev('dayCloseText(dayCloseCalc(\'2020-01-15T00:00:00.000Z\'))').includes('محل البركة'));
 
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
