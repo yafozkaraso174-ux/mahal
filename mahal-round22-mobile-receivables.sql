@@ -50,7 +50,7 @@ begin
   perform set_config('mahal.atomic_receipt','yes',true);
   update installment_contracts set data=jsonb_set(data,'{schedule}',sc),updated_at=now() where id=ct and tenant_id=tid;
  end if;
- if coalesce(p->>'method','') not in('كاش','إنستاباي','فودافون كاش','تحويل بنكي') then raise exception 'invalid method';end if;
+ if coalesce(p->>'method','') not in('كاش','تحويل','رصيد') then raise exception 'invalid method';end if;
  perform set_config('mahal.atomic_receipt','yes',true);
  insert into payments(id,tenant_id,date,kind,party_type,party_id,amount,note,method,contract_id,created_by) values(pid,tid,coalesce((p->>'receiptDate')::timestamptz,now()),'in','c',cid,a,left(coalesce(p->>'note',''),500),p->>'method',ct,auth.uid()) returning * into pay;
  r:=jsonb_build_object('payment',to_jsonb(pay),'contract',case when ct is not null then (select data from installment_contracts where id=ct and tenant_id=tid) else null end,'balance',round(bal-a,2));

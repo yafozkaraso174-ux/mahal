@@ -69,6 +69,6 @@ revoke all on function admin_invite_action(jsonb),admin_invite_list(),accept_sho
 grant execute on function admin_invite_action(jsonb),admin_invite_list(),accept_shop_invite(text) to authenticated;
 grant execute on function shop_invite_info(text) to anon,authenticated;
 -- Superseded insecure/direct provisioning and renewal routes are not part of the new UI.
-revoke execute on function admin_attach_shop(jsonb),admin_extend_subscription(uuid,integer),admin_set_tenant_status(uuid,text),admin_finish_shop(uuid,text,text,text,text,integer,text) from authenticated;
+revoke execute on function admin_attach_shop(jsonb),admin_extend_subscription(uuid,integer),admin_set_tenant_status(uuid,text),admin_finish_shop(uuid,text,text,text,text,integer,text) from public,anon,authenticated;
 notify pgrst,'reload schema';
 commit;
