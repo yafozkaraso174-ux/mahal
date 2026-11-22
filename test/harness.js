@@ -260,6 +260,20 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('migrate sets counter',mock.getCounter()>=1001);
  t('migrate sets flag',ev('DB.settings.migratedV2')===true);
 
+
+ /* 15. fresh device: demo/seed rows replaced by server state, nextNum from counter */
+ w.localStorage.removeItem('mahal_sync2_v1');
+ ev(`DB.customers.push({id:'demoC',name:'مطعم تجريبي',phone:'',type:'w'})`);
+ ev(`DB.products.push({id:'demoP',name:'صنف تجريبي',cat:'',unit:'قطعة',rPrice:1,wPrice:1,cost:1,stock:3,lowAt:0})`);
+ const chF=await ev('pullDelta(false)');await sleep(20);
+ t('fresh pull reports change',chF===true);
+ t('fresh pull clears demo customer',!ev(`DB.customers.find(c=>c.id==='demoC')`));
+ t('fresh pull clears demo product',!ev(`DB.products.find(p=>p.id==='demoP')`));
+ t('fresh pull brings server customer',!!ev(`DB.customers.find(c=>c.id==='c1')`));
+ t('fresh pull brings server product',!!ev(`DB.products.find(p=>p.id==='p1')`));
+ t('fresh pull sets nextNum from counter',ev('DB.nextNum')>1001);
+ t('sync2 populated after fresh pull',!!w.localStorage.getItem('mahal_sync2_v1'));
+
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
  process.exit(0);
