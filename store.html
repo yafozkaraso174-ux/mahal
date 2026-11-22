@@ -146,7 +146,7 @@ try{
  const h={'apikey':STORE_CFG.anon,'Authorization':'Bearer '+STORE_CFG.anon};
  const base=STORE_CFG.url.replace(/\/$/,'');
  const [pr,ir]=await Promise.all([
-   fetch(base+'/rest/v1/products?select=id,name,cat,unit,price,stock,photo_url&order=cat,name',{headers:h}),
+   fetch(base+'/rest/v1/products_public?select=id,name,cat,unit,price,stock,photo_url&order=cat,name',{headers:h}),
    fetch(base+'/rest/v1/shop_info?select=shop_name,phone,payment,delivery_fee,zones,delivery_on&id=eq.1',{headers:h}),
  ]);
  if(pr.status===404){notReady=true;products=[];render();return;}
