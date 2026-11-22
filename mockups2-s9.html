@@ -1,0 +1,102 @@
+<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F2ECDD;--card:#FFF;--line:#E4D8BE;--ink:#1B1812;--muted:#7A6F5C;
+--green:#0B6B3D;--green2:#12A150;--green-soft:#D9EFE2;--amber:#E8960C;--amber-soft:#FCEED3;
+--red:#D63B2F;--red-soft:#FBE3E0;--blue:#1D5BB5;--blue-soft:#E3EDFA;--deep:#0A3D27}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Cairo',sans-serif;background:#D8CFBC;color:var(--ink);padding:24px;display:flex;flex-wrap:wrap;gap:24px;justify-content:center}
+.phone{width:375px;min-height:720px;background:var(--bg);border-radius:28px;overflow:hidden;box-shadow:0 10px 34px rgba(0,0,0,.28);position:relative;padding-bottom:66px}
+.tag{position:absolute;top:10px;left:10px;background:#111;color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px;z-index:5}
+.appbar{background:linear-gradient(135deg,var(--green),var(--deep));padding:18px 16px 14px;display:flex;align-items:center;gap:10px;color:#fff}
+.appbar .t{font-size:18px;font-weight:800}
+.appbar .t small{display:block;font-size:11.5px;font-weight:700;opacity:.85}
+.back{width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff}
+.content{padding:4px 12px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px;margin-top:10px;box-shadow:0 2px 8px rgba(90,70,30,.06)}
+.trow{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;padding:6px 0}
+.k{color:var(--muted);font-weight:700}
+.grand{border-top:2px dashed var(--line);margin-top:6px;padding-top:10px;font-weight:800;font-size:15.5px}
+.btn{display:block;text-align:center;border-radius:14px;padding:13px;font-weight:800;font-size:14.5px;margin-top:10px}
+.btn-p{background:linear-gradient(135deg,var(--green2),var(--green));color:#fff;box-shadow:0 3px 10px rgba(11,107,61,.3)}
+.btn-o{background:var(--card);border:1.5px solid var(--line);color:var(--ink)}
+.btn-b{background:var(--blue);color:#fff;box-shadow:0 3px 10px rgba(29,91,181,.3)}
+.chip{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:99px}
+.chip-g{background:var(--green-soft);color:var(--green)}
+.chip-r{background:var(--red-soft);color:var(--red)}
+.chip-a{background:var(--amber-soft);color:var(--amber)}
+.item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1.5px solid var(--line)}
+.item:last-child{border-bottom:none}
+.item .nm{flex:1;font-weight:700;font-size:14px}
+.item .pr{font-size:12px;color:var(--muted);font-weight:700}
+.step{display:flex;align-items:center;gap:8px}
+.step button{width:28px;height:28px;border-radius:9px;background:var(--green);color:#fff;font-weight:800;font-size:15px;border:none}
+.step .q{font-weight:800;min-width:20px;text-align:center}
+.av{width:40px;height:40px;border-radius:13px;background:var(--blue-soft);display:flex;align-items:center;justify-content:center;font-size:18px}
+.big{font-size:28px;font-weight:900}
+.hero{background:linear-gradient(135deg,var(--green),var(--deep));color:#fff;border-radius:18px;padding:16px;margin-top:10px;text-align:center;box-shadow:0 4px 14px rgba(11,107,61,.35)}
+.hero .lbl{font-size:12.5px;font-weight:700;opacity:.85}
+.hero .note{color:#fff;opacity:.85}
+.row2{display:flex;gap:8px}
+.row2 .mini{flex:1;border-radius:14px;padding:10px;text-align:center;border:1.5px solid var(--line)}
+.mini .v{font-size:17.5px;font-weight:900}
+.mini .l{font-size:11px;color:var(--muted);font-weight:700}
+.mini.g{background:var(--green-soft)}.mini.r{background:var(--red-soft)}.mini.a{background:var(--amber-soft)}.mini.b{background:var(--blue-soft)}
+.tabbar{position:absolute;bottom:0;left:0;right:0;height:58px;background:var(--card);border-top:1.5px solid var(--line);display:flex;justify-content:space-around;align-items:center;color:var(--muted);font-size:11px;font-weight:700}
+.tabbar .on{color:var(--green);font-weight:900}
+.note{font-size:11.5px;color:var(--muted);font-weight:700;text-align:center;margin-top:8px;line-height:1.7}
+.seg{display:flex;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:3px;margin-top:10px}
+.seg div{flex:1;text-align:center;font-size:12.5px;font-weight:800;padding:7px;border-radius:9px;color:var(--muted)}
+.seg .on{background:var(--green);color:#fff}
+.wa{background:#DCF3E5;border:1.5px solid #A8DDBF;border-radius:14px;padding:10px;font-size:12.5px;font-weight:700;line-height:1.9;margin-top:8px}
+.pos{color:var(--green);font-weight:800}.neg{color:var(--red);font-weight:800}
+.inp{background:var(--card);border:2px solid var(--green);border-radius:14px;padding:12px;font-size:18px;font-weight:800;text-align:center;margin-top:8px;color:var(--ink)}
+
+.pchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.pchip{font-size:12px;font-weight:800;padding:6px 12px;border-radius:99px;background:var(--card);border:1.5px solid var(--line);color:var(--muted)}
+.pchip.on{background:var(--green);color:#fff;border-color:var(--green)}
+.rank{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1.5px solid var(--line)}
+.rank:last-child{border-bottom:none}
+.rank .medal{width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900}
+.rank .nm{flex:1}.rank .nm .t{font-weight:800;font-size:14px}.rank .nm .s{font-size:11.5px;color:var(--muted);font-weight:700}
+.rank .amt{font-weight:900;font-size:14.5px}
+.cam{margin-top:10px;height:270px;background:#10160f;border-radius:18px;position:relative;overflow:hidden}
+.cam .corner{position:absolute;width:34px;height:34px;border:4px solid #3fd47e}
+.cam .tl{top:52px;right:44px;border-left:none;border-bottom:none;border-radius:0 12px 0 0}
+.cam .tr{top:52px;left:44px;border-right:none;border-bottom:none;border-radius:12px 0 0 0}
+.cam .bl{bottom:52px;right:44px;border-left:none;border-top:none;border-radius:0 0 12px 0}
+.cam .br{bottom:52px;left:44px;border-right:none;border-top:none;border-radius:0 0 0 12px}
+.cam .laser{position:absolute;top:50%;right:36px;left:36px;height:3px;background:linear-gradient(90deg,transparent,#ff3b30,transparent);box-shadow:0 0 12px #ff3b30}
+.cam .hint{position:absolute;bottom:14px;right:0;left:0;text-align:center;color:#cfe9d8;font-size:12px;font-weight:700}
+.bc-found{background:var(--card);border:2px solid var(--green);border-radius:16px;padding:12px;margin-top:10px}
+.bc-code{direction:ltr;text-align:center;font-weight:800;letter-spacing:2px;color:var(--muted);font-size:13px;margin-top:4px}
+</style></head><body>
+<div class="phone" id="s9"><span class="tag">٩ · الباركود على الصنف</span>
+<div class="appbar"><div class="back">›</div><div class="t">زيت عباد ١ لتر<small>تعديل صنف</small></div></div>
+<div class="content">
+<div class="card">
+<div class="k" style="margin-bottom:6px">الباركود</div>
+<div style="display:flex;gap:8px;align-items:center">
+<div class="inp" style="flex:1;margin-top:0;font-size:16px">6223001234567</div>
+<div style="width:52px;height:52px;border-radius:14px;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px">📷</div>
+</div>
+<div class="note">دوس 📷 وصوّب على الباركود — أو امسح بجهاز الإسكنر وهو هنا</div>
+<div style="text-align:center;margin-top:10px;color:var(--ink)">
+<div style="display:inline-block;background:#fff;padding:8px 14px;border:1.5px solid var(--line);border-radius:10px">
+<div style="letter-spacing:0;line-height:1;font-size:0"><span style="display:inline-block;width:3px;height:38px;background:#111"></span><span style="display:inline-block;width:1px;height:38px;background:#111"></span><span style="display:inline-block;width:4px;height:38px;background:#111"></span><span style="display:inline-block;width:2px;height:38px;background:#111"></span><span style="display:inline-block;width:1px;height:38px;background:#111"></span><span style="display:inline-block;width:5px;height:38px;background:#111"></span><span style="display:inline-block;width:2px;height:38px;background:#111"></span><span style="display:inline-block;width:1px;height:38px;background:#111"></span><span style="display:inline-block;width:3px;height:38px;background:#111"></span><span style="display:inline-block;width:2px;height:38px;background:#111"></span><span style="display:inline-block;width:4px;height:38px;background:#111"></span><span style="display:inline-block;width:1px;height:38px;background:#111"></span><span style="display:inline-block;width:2px;height:38px;background:#111"></span><span style="display:inline-block;width:3px;height:38px;background:#111"></span></div>
+<div class="bc-code">6223001234567</div>
+</div></div>
+</div>
+<div class="card">
+<div class="trow"><span class="k">الاسم</span><b>زيت عباد ١ لتر</b></div>
+<div class="trow"><span class="k">سعر البيع</span><b>٤٧٠ ج</b></div>
+<div class="trow"><span class="k">سعر الجملة</span><b>٤٥٥ ج</b></div>
+<div class="trow" style="border:none"><span class="k">المخزون</span><b class="neg">١ قطعة ⚠️</b></div>
+</div>
+<button class="btn btn-p">حفظ ✓</button>
+<div class="note">الباركود اختياري — أي صنف ممكن يفضل من غيره زي دلوقتي</div>
+</div>
+<div class="tabbar"><span>الموردين</span><span>الزباين</span><span>＋ فاتورة</span><span class="on">الأصناف</span><span>الرئيسية</span></div>
+</div>
+</body></html>
