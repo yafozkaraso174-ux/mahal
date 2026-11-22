@@ -471,6 +471,28 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('saveService stores بيان for أخرى',otherSvc.service==='أخرى'&&otherSvc.note==='دفع فاتورة كهربا'&&otherSvc.network==='');
  ev(`DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!=='${otherSvc.id}')`);
  ev('closeSheet()');
+ /* فاتورة أرضي + فاتورة نت */
+ t('bill types in service kinds',ev('SVC_KINDS').includes('فاتورة أرضي')&&ev('SVC_KINDS').includes('فاتورة نت'));
+ ev('openServiceSheet()');
+ ev(`segPick(document.querySelector('#sv-service button[data-v="فاتورة أرضي"]'));svcServiceUI()`);
+ t('أرضي shows company picker',ev(`document.getElementById('sv-net-wrap').style.display==='block'&&document.getElementById('sv-net-lbl').textContent==='الشركة'`));
+ t('أرضي provider is المصرية للاتصالات',ev(`document.querySelectorAll('#sv-net button').length===1&&document.querySelector('#sv-net button').dataset.v==='المصرية للاتصالات'`));
+ ev(`$('#sv-amt').value='150';$('#sv-fee').value='5'`);
+ ev('saveService()');
+ const landSvc=ev('DB.serviceTxns[DB.serviceTxns.length-1]');
+ t('saveService stores أرضي provider',landSvc.service==='فاتورة أرضي'&&landSvc.network==='المصرية للاتصالات');
+ t('row shows أرضي provider',ev('vServices()').includes('فاتورة أرضي المصرية للاتصالات'));
+ ev(`DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!=='${landSvc.id}')`);
+ ev('openServiceSheet()');
+ ev(`segPick(document.querySelector('#sv-service button[data-v="فاتورة نت"]'));svcServiceUI()`);
+ t('نت shows 4 providers',ev(`document.querySelectorAll('#sv-net button').length===4&&document.getElementById('sv-net-wrap').style.display==='block'`));
+ ev(`segPick(document.querySelector('#sv-net button[data-v="وي"]'))`);
+ ev(`$('#sv-amt').value='300';$('#sv-fee').value='6'`);
+ ev('saveService()');
+ const netSvc=ev('DB.serviceTxns[DB.serviceTxns.length-1]');
+ t('saveService stores نت provider',netSvc.service==='فاتورة نت'&&netSvc.network==='وي');
+ ev(`DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!=='${netSvc.id}')`);
+ ev('closeSheet()');
  /* seg wraps on narrow screens */
  t('seg chips wrap not clip',html.includes('.seg{display:flex;flex-wrap:wrap'));
  t('seg buttons can shrink',html.includes('.seg button{flex:1 1 auto;min-width:0'));
