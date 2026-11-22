@@ -1,0 +1,159 @@
+<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>محلّي — موكاب لوحة مالك المنصة</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F2ECDD;--card:#FFF;--line:#E4D8BE;--ink:#1B1812;--muted:#7A6F5C;
+--green:#0B6B3D;--green2:#12A150;--green-soft:#D9EFE2;--amber:#E8960C;--amber-soft:#FCEED3;
+--red:#D63B2F;--red-soft:#FBE3E0;--blue:#1D5BB5;--blue-soft:#E3EDFA;--deep:#0A3D27;--purple:#6C3BD6;--purple-soft:#EEE7FB}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Cairo',sans-serif;background:#D8CFBC;color:var(--ink);padding:24px;display:flex;flex-wrap:wrap;gap:24px;justify-content:center}
+.phone{width:375px;min-height:720px;background:var(--bg);border-radius:28px;overflow:hidden;box-shadow:0 10px 34px rgba(0,0,0,.28);position:relative;padding-bottom:26px}
+.tag{position:absolute;top:10px;left:10px;background:#111;color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:99px;z-index:5}
+.appbar{background:linear-gradient(135deg,var(--purple),#3D1F7A);padding:18px 16px 14px;display:flex;align-items:center;gap:10px;color:#fff}
+.appbar .t{font-size:18px;font-weight:800}
+.appbar .t small{display:block;font-size:11.5px;font-weight:700;opacity:.85}
+.back{width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff}
+.content{padding:4px 12px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px;margin-top:10px;box-shadow:0 2px 8px rgba(90,70,30,.06)}
+.trow{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;padding:6px 0}
+.k{color:var(--muted);font-weight:700}
+.btn{display:block;text-align:center;border-radius:14px;padding:13px;font-weight:800;font-size:14.5px;margin-top:10px}
+.btn-p{background:linear-gradient(135deg,#8B5CF6,var(--purple));color:#fff;box-shadow:0 3px 10px rgba(108,59,214,.3)}
+.btn-o{background:var(--card);border:1.5px solid var(--line);color:var(--ink)}
+.btn-g{background:linear-gradient(135deg,var(--green2),var(--green));color:#fff}
+.btn-r{background:var(--red-soft);color:var(--red);border:1.5px solid #F0C4BF}
+.chip{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:99px}
+.chip-g{background:var(--green-soft);color:var(--green)}
+.chip-r{background:var(--red-soft);color:var(--red)}
+.chip-a{background:var(--amber-soft);color:var(--amber)}
+.shop{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1.5px solid var(--line)}
+.shop:last-child{border-bottom:none}
+.shop .nm{flex:1}
+.shop .nm b{font-size:14.5px;display:block}
+.shop .nm span{font-size:11.5px;color:var(--muted);font-weight:700}
+.av{width:42px;height:42px;border-radius:13px;background:var(--purple-soft);display:flex;align-items:center;justify-content:center;font-size:19px}
+.row2{display:flex;gap:8px}
+.row2 .mini{flex:1;border-radius:14px;padding:10px;text-align:center;border:1.5px solid var(--line)}
+.mini .v{font-size:18px;font-weight:900}
+.mini .l{font-size:11px;color:var(--muted);font-weight:700}
+.mini.g{background:var(--green-soft)}.mini.r{background:var(--red-soft)}.mini.a{background:var(--amber-soft)}.mini.p{background:var(--purple-soft)}
+.note{font-size:11.5px;color:var(--muted);font-weight:700;text-align:center;margin-top:8px;line-height:1.7}
+.seg{display:flex;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:3px;margin-top:8px}
+.seg div{flex:1;text-align:center;font-size:12.5px;font-weight:800;padding:7px;border-radius:9px;color:var(--muted)}
+.seg .on{background:var(--purple);color:#fff}
+.field{margin-top:10px}
+.lbl{font-size:12px;font-weight:800;color:var(--muted);margin-bottom:4px}
+.inp{width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:11px;font-size:14px;font-weight:700;color:var(--ink);font-family:inherit}
+.inp.ltr{direction:ltr;text-align:left}
+.prog{height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin-top:8px}
+.prog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--green2),var(--green))}
+.prog i.warn{background:linear-gradient(90deg,var(--amber),#C77800)}
+.days{font-size:12px;font-weight:800}
+.wa{background:#DCF3E5;border:1.5px solid #A8DDBF;border-radius:14px;padding:10px;font-size:12.5px;font-weight:700;line-height:1.9;margin-top:8px}
+.hero{background:linear-gradient(135deg,var(--purple),#3D1F7A);color:#fff;border-radius:18px;padding:18px;margin-top:10px;text-align:center;box-shadow:0 4px 14px rgba(108,59,214,.35)}
+.hero .big{font-size:26px;font-weight:900}
+.hero .lbl{font-size:12.5px;font-weight:700;opacity:.85}
+.sw{position:relative;width:44px;height:24px;border-radius:99px;background:var(--green);flex-shrink:0}
+.sw:after{content:'';position:absolute;top:3px;right:20px;width:18px;height:18px;border-radius:50%;background:#fff}
+.sw.off{background:#C9BFA8}.sw.off:after{right:3px}
+.usr{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1.5px solid var(--line);font-size:13px;font-weight:700}
+.usr:last-child{border-bottom:none}
+.usr .r{margin-right:auto;font-size:11px;color:var(--muted);font-weight:800}
+.stop-ic{width:74px;height:74px;border-radius:24px;background:var(--red-soft);display:flex;align-items:center;justify-content:center;font-size:34px;margin:18px auto 10px}
+</style></head><body>
+
+<!-- 1. لوحة المحلات -->
+<div class="phone"><span class="tag">١ · المحلات</span>
+<div class="appbar"><div class="t">محلّي — لوحة المالك<small>إدارة المحلات المشتركة</small></div></div>
+<div class="content">
+<div class="row2" style="margin-top:10px">
+<div class="mini p"><div class="v">٤</div><div class="l">محل مشترك</div></div>
+<div class="mini g"><div class="v">٣</div><div class="l">اشتراك فعّال</div></div>
+<div class="mini a"><div class="v">١</div><div class="l">قرب يخلص</div></div>
+</div>
+<div class="card">
+<div class="shop"><div class="av">🏪</div><div class="nm"><b>محل البركة</b><span>رزق · بقالة · مشترك من ٢٢ نوفمبر</span></div><div style="text-align:left"><span class="chip chip-g">فعّال</span><div class="days" style="color:var(--muted)">مفتوح</div></div></div>
+<div class="shop"><div class="av">🥩</div><div class="nm"><b>ملحمة الهدى</b><span>الحاج سمير · ملحمة</span></div><div style="text-align:left"><span class="chip chip-g">فعّال</span><div class="days pos" style="color:var(--green)">باقي ٢٣ يوم</div></div></div>
+<div class="shop"><div class="av">🐔</div><div class="nm"><b>فراخ المدينة</b><span>محمود · فراخ</span></div><div style="text-align:left"><span class="chip chip-a">قرب يخلص</span><div class="days" style="color:var(--amber)">باقي ٤ أيام</div></div></div>
+<div class="shop"><div class="av">🧀</div><div class="nm"><b>ألبان النصر</b><span>حسنين · ألبان</span></div><div style="text-align:left"><span class="chip chip-r">موقوف</span><div class="days" style="color:var(--red)">خلص من ٩ أيام</div></div></div>
+</div>
+<a class="btn btn-p">＋ أضف محل جديد</a>
+<div class="note">دوس على أي محل عشان تشوف تفاصيله، تجدده، أو توقفه</div>
+</div></div>
+
+<!-- 2. إضافة محل جديد -->
+<div class="phone"><span class="tag">٢ · محل جديد</span>
+<div class="appbar"><div class="back">›</div><div class="t">محل جديد<small>بيانات الدخول بتتجهز فورًا</small></div></div>
+<div class="content">
+<div class="card">
+<div class="field"><div class="lbl">اسم المحل</div><input class="inp" value="سوبر ماركت الأمانة"></div>
+<div class="field"><div class="lbl">اسم صاحب المحل</div><input class="inp" value="الحاج أشرف"></div>
+<div class="field"><div class="lbl">رقم التليفون</div><input class="inp ltr" value="01001234567"></div>
+<div class="field"><div class="lbl">الإيميل (بيدخل بيه)</div><input class="inp ltr" value="ashraf@amana.com"></div>
+<div class="field"><div class="lbl">الباسورد</div>
+<div style="display:flex;gap:8px"><input class="inp ltr" style="flex:1" value="Am@na2026"><span class="btn btn-o" style="margin:0;padding:11px 14px;font-size:12.5px">توليد 🎲</span></div></div>
+<div class="field"><div class="lbl">مدة الاشتراك</div>
+<div class="seg"><div>شهر</div><div class="on">٣ شهور</div><div>٦ شهور</div><div>سنة</div></div></div>
+<a class="btn btn-p">أنشئ المحل ✓</a>
+</div>
+<div class="wa">بعد الإنشاء ابعت لصاحب المحل:<br>الإيميل + الباسورد + لينك التطبيق — وأول ما يدخل يلاقي محله فاضي جاهز يضيف أصنافه.</div>
+</div></div>
+
+<!-- 3. تفاصيل محل -->
+<div class="phone"><span class="tag">٣ · تفاصيل محل</span>
+<div class="appbar"><div class="back">›</div><div class="t">ملحمة الهدى<small>الحاج سمير · 01055512345</small></div></div>
+<div class="content">
+<div class="row2" style="margin-top:10px">
+<div class="mini p"><div class="v">٢١٨</div><div class="l">صنف</div></div>
+<div class="mini g"><div class="v">٤٦</div><div class="l">فاتورة الشهر ده</div></div>
+<div class="mini"><div class="v">٢</div><div class="l">مستخدم</div></div>
+</div>
+<div class="card">
+<div class="trow"><span class="k">الحالة</span><span class="chip chip-g">فعّال</span><div class="sw"></div></div>
+<div class="trow"><span class="k">الاشتراك</span><b>١ ديسمبر ← ١ مارس</b></div>
+<div class="trow"><span class="k">المتبقي</span><b class="days" style="color:var(--green)">٢٣ يوم</b></div>
+<div class="prog"><i style="width:74%"></i></div>
+<a class="btn btn-g">↻ جدد الاشتراك</a>
+<a class="btn btn-r">⏻ وقف المحل مؤقتًا</a>
+</div>
+<div class="card">
+<div class="lbl" style="margin-bottom:2px">المستخدمين</div>
+<div class="usr">👤 الحاج سمير<span class="r">مالك · كل الصلاحيات</span></div>
+<div class="usr">👤 كريم<span class="r">موظف · فواتير بس</span></div>
+</div>
+<div class="note">آخر نشاط: النهارده ٢:٤٠ م</div>
+</div></div>
+
+<!-- 4. تجديد الاشتراك -->
+<div class="phone"><span class="tag">٤ · التجديد</span>
+<div class="appbar"><div class="back">›</div><div class="t">تجديد — فراخ المدينة<small>الاشتراك بيخلص بعد ٤ أيام</small></div></div>
+<div class="content">
+<div class="card">
+<div class="lbl">المدة الجديدة (بتضاف على المدة الباقية)</div>
+<div class="seg"><div>شهر</div><div class="on">٣ شهور</div><div>٦ شهور</div><div>سنة</div></div>
+<div class="trow" style="margin-top:10px"><span class="k">الاشتراك الحالي ينتهي</span><b>٢٦ نوفمبر</b></div>
+<div class="trow"><span class="k">بعد التجديد ينتهي</span><b style="color:var(--purple)">٢٦ فبراير</b></div>
+<a class="btn btn-p">أكّد التجديد ✓</a>
+</div>
+<div class="card">
+<div class="lbl" style="margin-bottom:2px">سجل الاشتراكات</div>
+<div class="trow"><span>٢٢ نوفمبر — شهر</span><span class="chip chip-g">فعّال</span></div>
+</div>
+<div class="note">المحل بيتحول لوضع "موقوف" تلقائيًا يوم ما الاشتراك يخلص — بياناته محفوظة وترجع أول ما تجدد</div>
+</div></div>
+
+<!-- 5. ما يراه المحل الموقوف -->
+<div class="phone"><span class="tag">٥ · شاشة المحل الموقوف</span>
+<div class="appbar" style="background:linear-gradient(135deg,var(--green),var(--deep))"><div class="t">محل البركة</div></div>
+<div class="content">
+<div class="card" style="text-align:center;margin-top:26px;padding:22px 16px">
+<div class="stop-ic">⏸️</div>
+<div style="font-size:17px;font-weight:900">الاشتراك موقوف مؤقتًا</div>
+<div style="font-size:13px;color:var(--muted);font-weight:700;margin-top:6px;line-height:1.9">اشتراك المحل خلص أو اتوقف من الإدارة.<br>بياناتك كلها محفوظة — جدد الاشتراك وهترجع تشتغل في ثانية.</div>
+<a class="btn btn-g" style="margin-top:14px">💬 كلم الإدارة واتساب</a>
+</div>
+<div class="note">لو اتجدد الاشتراك وحصلت مشكلة، افتح التطبيق تاني</div>
+</div></div>
+
+</body></html>
