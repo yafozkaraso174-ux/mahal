@@ -554,6 +554,20 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('vStats renders',ev('vStats()').includes('مبيعات الفترة')&&ev('vStats()').includes('أقل الأصناف حركة'));
  t('vStats custom shows date inputs',ev(`state.sp='custom';vStats()`).includes('type="date"'));
 
+ /* ---- stage: barcode field on products ---- */
+ t('ENT products barcode roundtrip',(r=>r&&r.barcode==='6223001234567')(ev(`ENT.products.unmap(ENT.products.map({id:'bp1',name:'زيت',cat:'',unit:'قطعة',rPrice:1,wPrice:1,cost:1,stock:1,lowAt:0,barcode:'6223001234567'}))`)));
+ t('products unmap defaults empty barcode',ev(`ENT.products.unmap({id:'bp2',name:'x',cat:'',unit:'قطعة',price:1,wprice:1,cost:1,stock:1,lowat:0})`).barcode==='');
+ ev(`DB.products.push({id:'bp3',name:'صنف باركود',cat:'',unit:'قطعة',rPrice:5,wPrice:4,cost:3,stock:2,lowAt:0,barcode:'6223001234567'})`);
+ t('prodByBarcode finds product',ev(`prodByBarcode('6223001234567').id`)==='bp3');
+ t('prodByBarcode trims input',ev(`prodByBarcode(' 6223001234567 ').id`)==='bp3');
+ t('prodByBarcode misses unknown',ev(`typeof prodByBarcode('999')`)==='undefined');
+ ev(`openProductSheet('bp3')`);
+ t('product sheet shows barcode field',ev(`document.getElementById('fp-barcode').value`)==='6223001234567');
+ ev(`document.getElementById('fp-barcode').value='111222333';saveProduct('bp3',false)`);
+ await new Promise(r=>setTimeout(r,50));
+ t('saveProduct stores barcode',ev(`DB.products.find(p=>p.id==='bp3').barcode`)==='111222333');
+ ev(`closeSheet()`);
+
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
  process.exit(0);

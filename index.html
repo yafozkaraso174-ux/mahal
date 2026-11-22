@@ -309,8 +309,8 @@ function logMove(pid,kind,qty,before,after,ref,mid){DB.movements.push({id:mid||u
 const OUTBOX_KEY='mahal_outbox_v1',SYNC2_KEY='mahal_sync2_v1';
 const ENT={
  products:{table:'products',ts:'updated_at',perms:null,
-  map:p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,wprice:p.wPrice,cost:p.cost,stock:p.stock,lowat:p.lowAt||0,deleted:!!p.deleted,photo_url:p.photo?SB.photoUrlFor(p):null,updated_at:new Date().toISOString()}),
-  unmap:(r,old)=>({id:r.id,name:r.name,cat:r.cat,unit:r.unit,rPrice:num(r.price),wPrice:num(r.wprice),cost:num(r.cost),stock:num(r.stock),lowAt:num(r.lowat),deleted:!!r.deleted,photo:old&&old.photo,photoVer:old&&old.photoVer})},
+  map:p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,wprice:p.wPrice,cost:p.cost,stock:p.stock,lowat:p.lowAt||0,barcode:p.barcode||'',deleted:!!p.deleted,photo_url:p.photo?SB.photoUrlFor(p):null,updated_at:new Date().toISOString()}),
+  unmap:(r,old)=>({id:r.id,name:r.name,cat:r.cat,unit:r.unit,rPrice:num(r.price),wPrice:num(r.wprice),cost:num(r.cost),stock:num(r.stock),lowAt:num(r.lowat),barcode:r.barcode||'',deleted:!!r.deleted,photo:old&&old.photo,photoVer:old&&old.photoVer})},
  customers:{table:'customers',ts:'updated_at',perms:null,
   map:c=>({id:c.id,name:c.name,phone:c.phone||'',type:c.type||'r',deleted:!!c.deleted,updated_at:new Date().toISOString()}),
   unmap:r=>({id:r.id,name:r.name,phone:r.phone||'',type:r.type||'r',deleted:!!r.deleted})},
@@ -434,7 +434,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r27';
+const APP_VER='2026-11-22r28';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -806,6 +806,7 @@ return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin
 <div class="content">${body}</div>`+navbar('home');}
 /* ============ derived ============ */
 const prod=id=>DB.products.find(p=>p.id===id);
+const prodByBarcode=code=>{const c=String(code||'').trim();return c?DB.products.find(p=>!p.deleted&&p.barcode&&p.barcode===c):undefined;};
 const cust=id=>DB.customers.find(c=>c.id===id);
 const supp=id=>DB.suppliers.find(s=>s.id===id);
 function custBalance(cid){let b=0;DB.invoices.filter(i=>i.customerId===cid).forEach(i=>b+=i.total-i.paid);DB.payments.filter(p=>p.partyType==='c'&&p.partyId===cid&&p.kind==='in').forEach(p=>b-=p.amount);return Math.round(b*100)/100;}
@@ -1527,6 +1528,7 @@ sheet(p?'تعديل صنف':'صنف جديد',`
 <input type="file" id="fp-photo" accept="image/*" style="display:none" onchange="pickProductPhoto(this)">
 ${p&&p.photo?`<button class="cbtn" style="background:var(--red-soft);color:var(--red);width:100%;margin-top:8px" id="fp-photo-rm" onclick="event.stopPropagation();markPhotoRemove()">${ic('trash',14)} شيل الصورة</button>`:''}</div>
 <div class="field"><div class="lbl">اسم الصنف</div><input id="fp-name" value="${p?esc(p.name):''}" placeholder="زيت عباد ١٠ لتر"></div>
+<div class="field"><div class="lbl">الباركود (اختياري — امسحه بالقارئ أو اكتبه)</div><input id="fp-barcode" inputmode="numeric" value="${p?esc(p.barcode||''):''}" placeholder="6223001234567"></div>
 <div class="field"><div class="lbl">الفئة</div><select id="fp-cat">${CATS.map(c=>`<option ${p&&p.cat===c?'selected':''}>${c}</option>`).join('')}</select></div>
 <div class="field"><div class="lbl">الوحدة</div><input id="fp-unit" value="${p?esc(p.unit):''}" placeholder="قطعة، كيلو، شيكارة…"></div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -1552,7 +1554,7 @@ ${mv.length?mv.map(m=>`<div class="row"><div class="mid"><div class="t">${LBL[m.
 <button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:10px" onclick="closeSheet();openProductSheet('${p.id}')">ارجع للصنف</button>`);}
 async function saveProduct(pid,fromPur){const name=$('#fp-name').value.trim();if(!name){toast('اكتب اسم الصنف');return;}
 const st=$('#fp-stock');
-const data={name,cat:$('#fp-cat').value,unit:$('#fp-unit').value.trim()||'قطعة',wPrice:num($('#fp-w').value),rPrice:num($('#fp-r').value),cost:num($('#fp-cost').value),stock:st?num(st.value):0,lowAt:num($('#fp-low').value)};
+const data={name,cat:$('#fp-cat').value,unit:$('#fp-unit').value.trim()||'قطعة',wPrice:num($('#fp-w').value),rPrice:num($('#fp-r').value),cost:num($('#fp-cost').value),stock:st?num(st.value):0,lowAt:num($('#fp-low').value),barcode:($('#fp-barcode')?.value||'').trim()};
 const ph=pendingPhoto;pendingPhoto=null;
 try{
 if(pid){const p=prod(pid);const md=st?Math.round((num(st.value)-p.stock)*100)/100:0;if(st&&md!==0){const mid=uid();logMove(pid,'edit',md,p.stock,num(st.value),'تعديل يدوي',mid);enqueue({type:'upsert',table:'movements',rowId:mid,prefer:'resolution=ignore-duplicates',row:ENT.movements.map(DB.movements[DB.movements.length-1])});}Object.assign(p,data);
