@@ -306,7 +306,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r17';
+const APP_VER='2026-11-22r18';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -614,7 +614,10 @@ function orderEditHTML(){const d=ordDraft;const total=Math.round((d.items.reduce
 return `<div id="ord-edit">${d.items.length?d.items.map((it,i)=>`<div class="item-row"><div class="mid"><div class="t">${esc(it.name)}</div><div class="s">${fmt(it.price)} ج لل${esc(it.unit||'قطعة')} · الإجمالي ${fmt(it.qty*it.price)}</div></div><div class="qty"><button onclick="ordQty(${i},1)">＋</button><span class="n">${fmt(it.qty)}</span><button onclick="ordQty(${i},-1)">−</button></div><button style="color:var(--red)" onclick="ordDelItem(${i})">${ic('trash',18)}</button></div>`).join(''):`<div class="empty">الطلب اتفضى — ارجع وامسحه لو عايز</div>`}
 <div style="display:flex;justify-content:space-between;margin:12px 2px;font-weight:800;font-size:15px"><span>الإجمالي بعد التعديل${d.fee?` (شامل توصيل ${fmt(d.fee)} ج)`:''}</span><span>${fmt(total)} جنيه</span></div>
 <button class="btn btn-p" style="width:100%" onclick="saveOrderEdit()">حفظ التعديل ✓</button></div>`;}
-function ordQty(i,d){const it=ordDraft.items[i];it.qty=Math.max(1,(+it.qty||1)+d);const el=$('#ord-edit');if(el)el.outerHTML=orderEditHTML();}
+function ordQty(i,d){const it=ordDraft.items[i];const p=prod(it.id)||DB.products.find(x=>x.name===it.name)||null;const mx=p?p.stock:Infinity;
+const nq=Math.max(1,(+it.qty||1)+d);
+if(nq>mx){it.qty=Math.max(1,mx);toast('المتاح من "'+it.name+'" '+fmt(Math.max(mx,0))+' بس');const el0=$('#ord-edit');if(el0)el0.outerHTML=orderEditHTML();return;}
+it.qty=nq;const el=$('#ord-edit');if(el)el.outerHTML=orderEditHTML();}
 function ordDelItem(i){ordDraft.items.splice(i,1);const el=$('#ord-edit');if(el)el.outerHTML=orderEditHTML();}
 async function saveOrderEdit(){const d=ordDraft;if(!d)return;if(!d.items.length){toast('مفيش أصناف في الطلب');return;}
 const total=Math.round((d.items.reduce((t,it)=>t+it.qty*it.price,0)+(d.fee||0))*100)/100;
@@ -625,7 +628,9 @@ function confirmOrder(id){const o=(shopOrders||[]).find(x=>String(x.id)===String
 if(!o.items||!o.items.length){toast('الطلب فاضي');return;}
 const fee=Math.max(0,+o.delivery_fee||0);
 const total=Math.round((o.items.reduce((t,it)=>t+(+it.qty||1)*(+it.price||0),0)+fee)*100)/100;
+const short=o.items.map(it=>{const p=prod(it.id)||DB.products.find(x=>x.name===it.name)||null;return p&&(+it.qty||1)>p.stock?`${esc(it.name)} (مطلوب ${fmt(+it.qty||1)} · متاح ${fmt(p.stock)})`:null;}).filter(Boolean);
 sheet('تأكيد الطلب ✓',`<div style="font-size:14px;font-weight:800;margin-bottom:4px">${esc(o.customer_name||'زبون متجر')}</div>
+${short.length?`<div class="alert" style="margin-top:0;background:var(--red-soft);border-color:#EFC9C5"><span style="color:var(--red)">${ic('alert')}</span><div class="tx" style="color:var(--red)">المخزون مش مكفي: ${short.join('، ')} — عدّل الطلب الأول</div></div>`:''}
 <div class="total-card" style="margin-bottom:12px">
 <div class="trow"><span class="k">إجمالي الطلب</span><span style="font-weight:800">${fmt(total)} جنيه</span></div>
 <div class="trow"><span class="k">الزبون دفع دلوقتي</span><input id="co-paid" inputmode="decimal" value="${fmt(total)}" oninput="const l=Math.round((${total}-num(this.value))*100)/100;$('#co-left').textContent=l>0?('هيبقى عليه '+fmt(l)+' ج على الحساب'):(l<0?('خالص ✓ + رصيد له '+fmt(-l)+' ج'):'خالص ✓');"></div>
@@ -635,7 +640,7 @@ sheet('تأكيد الطلب ✓',`<div style="font-size:14px;font-weight:800;ma
 async function confirmOrderGo(id){const o=(shopOrders||[]).find(x=>String(x.id)===String(id));if(!o)return;
 const items=o.items.map(it=>{const p=prod(it.id)||DB.products.find(x=>x.name===it.name)||null;
 return {productId:p?p.id:'',name:it.name,unit:it.unit||(p?p.unit:'قطعة'),qty:+it.qty||1,price:+it.price||0,cost:p?p.cost:0,_p:p};});
-for(const it of items){if(it._p&&it.qty>it._p.stock){toast(`الكمية من "${it.name}" أكبر من المتاح (${fmt(it._p.stock)} ${it.unit}) — عدّل الطلب الأول`);closeSheet();return;}}
+for(const it of items){if(it._p&&it.qty>it._p.stock){toast(`الكمية من "${it.name}" أكبر من المتاح (${fmt(it._p.stock)} ${it.unit}) — عدّل الطلب الأول`);return;}}
 const ph=String(o.phone||'').replace(/\D/g,'');
 let c=ph?DB.customers.find(x=>String(x.phone||'').replace(/\D/g,'')===ph):null;
 if(!c)c=DB.customers.find(x=>x.name.trim()===String(o.customer_name||'').trim());
@@ -872,16 +877,21 @@ function invItemRow(it,i){const p=prod(it.productId);return `<div class="item-ro
 <div class="qty"><button onclick="chQty(${i},1)">＋</button><span class="n">${fmt(it.qty)}</span><button onclick="chQty(${i},-1)">−</button></div>
 <div class="amt" style="width:60px;text-align:left">${fmt(it.qty*it.price)}</div>
 <button style="color:var(--red)" onclick="invDraft.items.splice(${i},1);render()">${ic('trash',18)}</button></div>`;}
-function chQty(i,d){const it=invDraft.items[i];it.qty=Math.max(1,(+it.qty||1)+d);render();}
+function chQty(i,d){const it=invDraft.items[i];const p=prod(it.productId);const mx=p?p.stock:Infinity;
+const nq=Math.max(1,(+it.qty||1)+d);
+if(nq>mx){it.qty=Math.max(1,mx);toast('المتاح من "'+it.name+'" '+fmt(Math.max(mx,0))+' بس');render();return;}
+it.qty=nq;render();}
 function invPayMath(d,m){const paid=num(d.paid);const c=d.customerId?cust(d.customerId):null;const credit=c?Math.max(-custBalance(c.id),0):0;const use=d.useCredit!==false&&credit>0;const applied=use?Math.min(credit,Math.max(m.total-paid,0)):0;const left=Math.round(Math.max(m.total-paid-applied,0)*100)/100;const over=Math.round(Math.max(paid+applied-m.total,0)*100)/100;return{paid,credit,applied,left,over,use};}
 function payLeftText(pm){return pm.left>0?(fmt(pm.left)+' جنيه'):(pm.over>0?('خالص ✓ + رصيد له '+fmt(pm.over)+' ج'):'خالص ✓');}
 function updInvTotals(){const m=invMath(invDraft);const pm=invPayMath(invDraft,m);const el=$('#inv-left');if(el)el.textContent=payLeftText(pm);const s=$('#inv-sub');if(s)s.textContent=fmt(m.sub)+' جنيه';const r=$('#inv-math');if(r)r.innerHTML=invMathRows(m);const cr=$('#inv-credit-row');if(cr)cr.style.display=pm.credit>0?'':'none';}
 function openPickProduct(){if(!DB.products.length){toast('ضيف أصناف الأول');return;}
 sheet('اختار صنف',`<div class="search" style="margin-top:0">${ic('search',18)}<input id="pp-q" placeholder="دوّر…" oninput="pickFilter(this.value)"></div><div id="pp-list">${pickListHTML('')}</div>`);setTimeout(()=>$('#pp-q')?.focus(),50);}
-function pickListHTML(q){return DB.products.filter(p=>!q||p.name.includes(q)).map(p=>`<button class="row" style="margin-bottom:6px" onclick="pickProduct('${p.id}')"><div class="mid"><div class="t">${esc(p.name)}</div><div class="s">${invDraft.priceType==='w'?fmt(p.wPrice):fmt(p.rPrice)} ج · متاح ${fmt(p.stock)} ${esc(p.unit)}</div></div>${ic('plus',18)}</button>`).join('')||'<div class="empty">مفيش نتايج</div>';}
+function pickListHTML(q){return DB.products.filter(p=>!q||p.name.includes(q)).map(p=>`<button class="row" style="margin-bottom:6px;${p.stock<=0?'opacity:.55;':''}" onclick="pickProduct('${p.id}')"><div class="mid"><div class="t">${esc(p.name)}</div><div class="s">${invDraft.priceType==='w'?fmt(p.wPrice):fmt(p.rPrice)} ج · متاح ${fmt(p.stock)} ${esc(p.unit)}</div></div>${p.stock<=0?'<span class="badge b-red">خلص</span>':ic('plus',18)}</button>`).join('')||'<div class="empty">مفيش نتايج</div>';}
 function pickFilter(q){$('#pp-list').innerHTML=pickListHTML(q);}
 function pickProduct(pid){const p=prod(pid);if(!p)return;const ex=invDraft.items.find(it=>it.productId===pid);
-if(ex){ex.qty+=1;}else{invDraft.items.push({productId:pid,name:p.name,unit:p.unit,qty:1,price:invDraft.priceType==='w'?p.wPrice:p.rPrice,cost:p.cost});}
+if(p.stock<=0){toast('"'+p.name+'" خلص من المخزون');return;}
+if(ex){if(ex.qty+1>p.stock){toast('المتاح من "'+p.name+'" '+fmt(p.stock)+' بس');return;}ex.qty+=1;}
+else{invDraft.items.push({productId:pid,name:p.name,unit:p.unit,qty:1,price:invDraft.priceType==='w'?p.wPrice:p.rPrice,cost:p.cost});}
 closeSheet();render();}
 function saveInvoice(andPrint){const d=invDraft;if(!d.customerId){toast('اختار الزبون الأول');return;}
 if(!d.items.length){toast('ضيف صنف واحد على الأقل');return;}
