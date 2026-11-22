@@ -93,7 +93,7 @@ const SUPA={url:'https://ofqhrpkgxxbdrhuujgxt.supabase.co',anon:'sb_publishable_
 let token=localStorage.getItem('mahal_admin_token')||'';
 let tenants=[];
 const $=s=>document.querySelector(s);
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('ar-EG',{day:'numeric',month:'long'}):'—';
 const daysLeft=t=>{if(!t.sub_end)return null;const t1=new Date(t.sub_end+'T00:00:00');const t0=new Date();t0.setHours(0,0,0,0);return Math.round((t1-t0)/86400000);};
 function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600);}
@@ -123,7 +123,7 @@ function logout(){token='';localStorage.removeItem('mahal_admin_token');$('#view
 async function boot(){
  $('#view-login').classList.add('hidden');$('#view-main').classList.remove('hidden');
  try{
-  const me=await api('shop_users?select=name,owner&limit=1');
+  // Admin access is enforced again on every server action.
   const admin=await api('platform_admins?select=user_id&limit=1');
   if(!admin||!admin.length){$('#main-wrap').innerHTML='<div class="card" style="text-align:center;margin-top:30px"><div class="stop-ic">🔒</div><b>الحساب ده مش أدمن المنصة</b><div class="note">سجّل بحساب مالك المنصة</div></div>';return;}
   loadAll();
@@ -139,7 +139,7 @@ async function loadAll(){
 }
 
 function statusOf(t){const d=daysLeft(t);
- if(t.status!=='active')return{chip:'<span class="chip chip-r">موقوف</span>',txt:d!==null?('خلص من '+Math.abs(d)+' يوم'):'موقوف',cls:'var(--red)',kind:'out'};
+ if(t.status!=='active')return{chip:'<span class="chip chip-r">موقوف</span>',txt:d!==null?(d<0?'خلص من '+Math.abs(d)+' يوم':'باقي '+d+' يوم'):'موقوف',cls:'var(--red)',kind:'out'};
  if(d===null)return{chip:'<span class="chip chip-g">فعّال</span>',txt:'مفتوح',cls:'var(--muted)',kind:'ok'};
  if(d<0)return{chip:'<span class="chip chip-r">منتهي</span>',txt:'خلص من '+Math.abs(d)+' يوم',cls:'var(--red)',kind:'out'};
  if(d<=7)return{chip:'<span class="chip chip-a">قرب يخلص</span>',txt:'باقي '+d+' يوم',cls:'var(--amber)',kind:'warn'};
@@ -208,10 +208,8 @@ function renderAdd(){
  $('#ad-seg').querySelectorAll('div').forEach(d=>d.onclick=()=>{$('#ad-seg').querySelectorAll('div').forEach(x=>x.classList.remove('on'));d.classList.add('on');addMonths=+d.dataset.m;});
  genPass();
 }
-function genPass(){
- const w1=['Baraka','Nour','Amal','Safaa','Rizk','Hoda','Amana','Fath'][Math.floor(Math.random()*8)];
- $('#ad-pass').value=w1+'@'+new Date().getFullYear()+Math.floor(Math.random()*90+10);
-}
+function genPass(){const bytes=crypto.getRandomValues(new Uint8Array(20));const chars='abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#%';$('#ad-pass').value=Array.from(bytes,b=>chars[b%chars.length]).join('');}
+
 async function createShop(){
  const name=$('#ad-name').value.trim(),owner=$('#ad-owner').value.trim(),phone=$('#ad-phone').value.trim(),
        email=$('#ad-email').value.trim().toLowerCase(),pass=$('#ad-pass').value;
@@ -224,23 +222,17 @@ async function createShop(){
   const sj=await sr.json();
   const uid=sj&&(sj.user?sj.user.id:sj.id);
   if(!sr.ok||!uid)throw (sj&&(sj.msg||sj.message||sj.error_description))||'تعذر إنشاء حساب الدخول (الإيميل مستخدم؟)';
-  // ٢) المحل
-  const start=new Date();const end=new Date();end.setMonth(end.getMonth()+addMonths);
-  const t=await api('tenants',{method:'POST',headers:{'Prefer':'return=representation'},
-   body:JSON.stringify({name,owner_name:owner,phone,status:'active',
-    sub_start:start.toISOString().slice(0,10),sub_end:end.toISOString().slice(0,10)})});
-  const tid=t[0].id;
-  // ٣) المستخدم المالك
-  await api('shop_users',{method:'POST',headers:{'Prefer':'return=minimal'},
-   body:JSON.stringify({tenant_id:tid,auth_id:uid,name:owner||name,owner:true,active:true,
-    perms:{orders:1,invoice:1,products:1,customers:1,suppliers:1,settings:1,del:1,stats:1}})});
+  // Tenant and owner membership are created atomically by a checked server routine.
+  const tid=await rpc('admin_finish_shop',{p_user:uid,p_email:email,p_name:name,p_owner:owner,p_phone:phone,p_months:addMonths});
+  const end=new Date();end.setMonth(end.getMonth()+addMonths);
   $('#main-wrap').innerHTML=`
   <div class="card" style="text-align:center;margin-top:16px">
   <div style="font-size:44px">✅</div>
   <b style="font-size:16px">محل "${esc(name)}" اتعمل!</b>
   <div class="cred">اللينك: yafozkaraso174-ux.github.io/mahal<br>الإيميل: ${esc(email)}<br>الباسورد: ${esc(pass)}<br>الاشتراك لحد: ${fmtD(end.toISOString().slice(0,10))}</div>
-  <button class="btn btn-g" onclick="copyCred('${esc(email)}','${esc(pass)}')">📋 انسخ بيانات الدخول</button>
+  <button class="btn btn-g" id="copy-cred">📋 انسخ بيانات الدخول</button>
   <button class="btn btn-p" onclick="loadAll()">رجوع للقائمة</button></div>`;
+  $('#copy-cred').onclick=()=>copyCred(email,pass);
  }catch(e){toast(String(e).slice(0,120));btn.disabled=false;btn.textContent='أنشئ المحل ✓';}
 }
 function copyCred(email,pass){
@@ -273,6 +265,7 @@ async function doRenew(tid){
 }
 async function toggleTenant(i,st){
  const t=tenants[i];
+ if(!confirm(st==='active'?'تشغيل المحل؟':'توقف المحل مؤقتًا؟ بياناته هتفضل محفوظة.'))return;
  try{await rpc('admin_set_tenant_status',{p_tenant:t.id,p_status:st});
   toast(st==='active'?'المحل اتشغّل ✅':'المحل اتوقف ⏸');loadAll();
  }catch(e){toast(String(e).slice(0,100));}

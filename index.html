@@ -260,7 +260,9 @@ wa:'<path d="M21 11.8a8.3 8.3 0 0 1-8.4 8.2c-1.4 0-2.8-.3-4-1L3 20.4l1.5-5A8.3 8
 const ic=(n,s)=>`<svg class="i"${s?` style="width:${s}px;height:${s}px"`:''} viewBox="0 0 24 24">${IC[n]||''}</svg>`;
 const catIcon=c=>c==='زيوت وسمنة'?'barrel':(c==='فول وبقوليات'?'sack':'box');
 /* ============ store ============ */
-const KEY='mahal_v1';
+let tenantScope='';
+const tenantKey=k=>tenantScope?k+'_'+tenantScope:k;
+let KEY='mahal_v1';
 const CATS=['زيوت وسمنة','فول وبقوليات','أرز ومكرونة','مستلزمات'];
 function seed(){return{
 users:[],movements:[],drafts:[],
@@ -303,13 +305,13 @@ if(!Array.isArray(DB.dayCloses))DB.dayCloses=[];
 if(!Array.isArray(DB.serviceTxns))DB.serviceTxns=[];
 if(!Array.isArray(DB.users))DB.users=[];
 DB.users.forEach(u=>{if(!u.owner&&u.perms&&u.perms.stats==null)u.perms.stats=1;});
-const SYNC_KEY='mahal_sync_v1',DIRTY_KEY='mahal_db_changed_at';
+let SYNC_KEY='mahal_sync_v1',DIRTY_KEY='mahal_db_changed_at';
 let backupTimer=null,applyingRemote=false,syncBusy=false,lastSyncTick=0;
 function markDirty(){if(applyingRemote)return;localStorage.setItem(DIRTY_KEY,new Date().toISOString());}
 function save(){localStorage.setItem(KEY,JSON.stringify(DB));markDirty();try{scheduleCloudBackup();}catch(e){}}
 function logMove(pid,kind,qty,before,after,ref,mid){DB.movements.push({id:mid||uid(),pid,kind,qty,before,after,ref:ref||'',date:new Date().toISOString()});}
 /* ============ مزامنة الجداول: شغل كل الأجهزة بيتشارك لايف ============ */
-const OUTBOX_KEY='mahal_outbox_v1',SYNC2_KEY='mahal_sync2_v1';
+let OUTBOX_KEY='mahal_outbox_v1',SYNC2_KEY='mahal_sync2_v1';
 const ENT={
  products:{table:'products',ts:'updated_at',perms:null,
   map:p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,wprice:p.wPrice,cost:p.cost,stock:p.stock,lowat:p.lowAt||0,barcode:p.barcode||'',deleted:!!p.deleted,photo_url:p.photo?SB.photoUrlFor(p):null,updated_at:new Date().toISOString()}),
@@ -317,7 +319,7 @@ const ENT={
    const sv=r.photo_url?num(((r.photo_url.match(/[?&]v=(\d+)/)||[])[1])||1):0;
    let photo=0,photoVer=0;
    if(sv){photo=1;photoVer=sv;}
-   else if(old&&old.photo&&old.photoVer){try{const ups=JSON.parse(localStorage.getItem('mahal_photo_up')||'{}');if(ups[old.id]!==old.photoVer){photo=old.photo;photoVer=old.photoVer;}}catch(e){}}
+   else if(old&&old.photo&&old.photoVer){try{const ups=JSON.parse(localStorage.getItem(tenantKey('mahal_photo_up'))||'{}');if(ups[old.id]!==old.photoVer){photo=old.photo;photoVer=old.photoVer;}}catch(e){}}
    return {id:r.id,name:r.name,cat:r.cat,unit:r.unit,rPrice:num(r.price),wPrice:num(r.wprice),cost:num(r.cost),stock:num(r.stock),lowAt:num(r.lowat),barcode:r.barcode||'',deleted:!!r.deleted,photo,photoVer};}},
  customers:{table:'customers',ts:'updated_at',perms:null,
   map:c=>({id:c.id,name:c.name,phone:c.phone||'',type:c.type||'r',deleted:!!c.deleted,updated_at:new Date().toISOString()}),
@@ -362,7 +364,7 @@ function outboxPending(){return outboxGet().length;}
 function enqueue(op){const o=outboxGet();op.qid=uid();op.at=new Date().toISOString();o.push(op);outboxSet(o);flushOutbox().catch(()=>{});}
 function outboxHas(table,id){return outboxGet().some(x=>x.table===table&&x.rowId===id&&!x.failed);}
 let flushBusy=false;
-async function flushOutbox(){if(flushBusy||!navigator.onLine||!SB.ready()||!authGet()||!curUser)return;
+async function flushOutbox(){if(flushBusy||!navigator.onLine||!SB.ready()||!authGet()||!curUser||curUser.tenantBlocked)return;
  flushBusy=true;
  try{await SB.ensureSession();let o=outboxGet();
   for(const op of o){if(op.failed)continue;
@@ -386,7 +388,7 @@ async function applyOp(op){
  if(op.type==='closeDay'){await rpc('close_day',{p:op.payload});return;}
  if(op.type==='service'){await rpc('save_service_txn',{p:op.payload});return;}
  if(op.type==='upsert'){await SB.req(op.table,{method:'POST',headers:{'Content-Type':'application/json','Prefer':(op.prefer||'resolution=merge-duplicates')},body:JSON.stringify([op.row])});
-  if(op.table==='products'){const lp=DB.products.find(x=>x.id===op.rowId);if(lp&&lp.photo&&lp.photoVer){const ups=JSON.parse(localStorage.getItem('mahal_photo_up')||'{}');if(ups[lp.id]!==lp.photoVer){const blob=await PHOTOS.get(lp.id);if(blob){await SB.uploadPhoto(lp.id,blob);ups[lp.id]=lp.photoVer;localStorage.setItem('mahal_photo_up',JSON.stringify(ups));}}}}
+  if(op.table==='products'){const lp=DB.products.find(x=>x.id===op.rowId);if(lp&&lp.photo&&lp.photoVer){const ups=JSON.parse(localStorage.getItem(tenantKey('mahal_photo_up'))||'{}');if(ups[lp.id]!==lp.photoVer){const blob=await PHOTOS.get(lp.id);if(blob){await SB.uploadPhoto(lp.id,blob);ups[lp.id]=lp.photoVer;localStorage.setItem(tenantKey('mahal_photo_up'),JSON.stringify(ups));}}}}
   return;}
  if(op.type==='softdel'){await SB.req(op.table+'?id=eq.'+encodeURIComponent(op.rowId),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({deleted:true})});return;}
  if(op.type==='harddel'){await SB.req(op.table+'?id=eq.'+encodeURIComponent(op.rowId),{method:'DELETE',headers:{'Prefer':'return=minimal'}});return;}
@@ -442,7 +444,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r33';
+const APP_VER='2026-11-22r37';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -459,7 +461,7 @@ if(st!==200){toast(j.error_description==='Email not confirmed'?'الإيميل �
 authSet({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600),uid:j.user&&j.user.id,email:em});
 const u=await fetchMyRole();
 if(!u)return;
-loginOk(u);toast('أهلاً بيك يا '+esc(u.name)+' ✓');}
+await loginOk(u);toast('أهلاً بيك يا '+esc(u.name)+' ✓');}
 async function fetchMyRole(){const a=authGet();if(!a||!a.uid){authSet(null);return null;}
 let rows;try{await SB.ensureSession();rows=await SB.req('shop_users?auth_id=eq.'+a.uid+'&select=*');}
 catch(e){if((e&&e.message||'').includes('400')){authSet(null);toast('في تحديث ناقص في قاعدة البيانات — شغّل ملف SQL الأخير في Supabase الأول');return null;}
@@ -469,9 +471,38 @@ catch(e){if((e&&e.message||'').includes('400')){authSet(null);toast('في تحد
 const r=rows&&rows[0];
 if(!r){authSet(null);toast('الحساب ده مش مربوط بمستخدم في المحل — كلم صاحب المحل يضيفك من إدارة المستخدمين');return null;}
 if(r.active===false){authSet(null);toast('الحساب ده متوقف — كلم صاحب المحل');return null;}
-return {id:r.id,name:r.name,owner:!!r.owner,active:!!r.active,perms:r.perms||{},authId:r.auth_id,upd:r.updated_at||''};}
+return {id:r.id,name:r.name,owner:!!r.owner,active:!!r.active,perms:r.perms||{},authId:r.auth_id,tenantId:r.tenant_id,upd:r.updated_at||''};}
 function loginBad(inp){toast('الإيميل أو الباسورد غلط');inp.value='';inp.focus();}
-function loginOk(u){curUser=u;sessionStorage.setItem('mahal_cur',JSON.stringify(u));render();}
+async function refreshTenant(){
+ if(!curUser||!curUser.tenantId)return;
+ const rows=await SB.req('tenants?id=eq.'+curUser.tenantId+'&select=id,name,status,sub_end');
+ const t=rows&&rows[0];if(!t)throw new Error('missing tenant');
+ const today=new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'});
+ curUser.tenantBlocked=t.status!=='active'||!!(t.sub_end&&t.sub_end<today);
+ DB.settings.shopName=t.name;
+}
+function activateTenant(u){
+ if(!u.tenantId)throw new Error('missing tenant');
+ clearTimeout(backupTimer);backupTimer=null;
+ const keys=['mahal_v1','mahal_sync_v1','mahal_db_changed_at','mahal_outbox_v1','mahal_sync2_v1','mahal_photo_up','mahal_photo_dn','mahal_last_backup'];
+ tenantScope=u.tenantId;
+ if(tenantScope==='5336a072-d9eb-43d9-ac91-4d9d6572b781'&&!localStorage.getItem(tenantKey('mahal_v1'))){
+  keys.forEach(k=>{const v=localStorage.getItem(k);if(v!==null)localStorage.setItem(tenantKey(k),v);});
+ }
+ KEY=tenantKey('mahal_v1');SYNC_KEY=tenantKey('mahal_sync_v1');DIRTY_KEY=tenantKey('mahal_db_changed_at');OUTBOX_KEY=tenantKey('mahal_outbox_v1');SYNC2_KEY=tenantKey('mahal_sync2_v1');
+ const blank=seed();ENT_ORDER.forEach(k=>blank[k]=[]);blank.users=[];blank.drafts=[];blank.settings.shopName='محلك';blank.settings.migratedV2=true;blank.settings.pay={cash:{on:true}};blank.settings.zones=[];blank.settings.deliveryOn=true;blank.settings.deliveryFee=0;
+ let old=null;try{old=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}
+ DB=Object.assign(blank,old||{});DB.settings=Object.assign(blank.settings,(old&&old.settings)||{},{migratedV2:true});
+ if(PHOTOS.db){PHOTOS.db.close();PHOTOS.db=null;}
+ Object.values(photoURLs).forEach(u=>URL.revokeObjectURL(u));Object.keys(photoURLs).forEach(k=>delete photoURLs[k]);
+ shopOrders=null;shopOrdersAt=0;usersCache=null;invDraft=null;purDraft=null;
+}
+async function loginOk(u){
+ curUser=null;activateTenant(u);curUser=u;
+ try{await refreshTenant();}catch(e){curUser=null;throw e;}
+ sessionStorage.setItem('mahal_cur',JSON.stringify(u));render();
+}
+window.addEventListener('storage',e=>{if(e.key===AUTH_KEY){curUser=null;sessionStorage.removeItem('mahal_cur');closeSheet();render();}});
 function logout(){curUser=null;authSet(null);sessionStorage.removeItem('mahal_cur');closeSheet();go('#/');render();}
 function vNoPerm(){return `<div class="appbar"><div>${backBtn('#/')}<div class="shop" style="margin-top:4px">مش مسموح</div></div></div><div class="content"><div class="empty"><div class="big">الصفحة دي مش متاحة لحسابك</div>كلم صاحب المحل لو محتاج الصلاحية دي</div></div>`+navbar('');}
 /* ---- إدارة المستخدمين (المالك) ---- */
@@ -555,7 +586,7 @@ try{await SB.ensureSession();SB.load();const base=(SB.cfg.url||SB_DEF.url).repla
 /* ============ صور الأصناف (تخزين محلي IndexedDB) ============ */
 const PHOTOS={
  db:null,
- open(){return new Promise((res,rej)=>{if(this.db)return res(this.db);const r=indexedDB.open('mahal_photos',1);r.onupgradeneeded=()=>r.result.createObjectStore('photos');r.onsuccess=()=>{this.db=r.result;res(this.db);};r.onerror=()=>rej(r.error);});},
+ open(){return new Promise((res,rej)=>{if(this.db)return res(this.db);const r=indexedDB.open(tenantScope&&tenantScope!=='5336a072-d9eb-43d9-ac91-4d9d6572b781'?'mahal_photos_'+tenantScope:'mahal_photos',1);r.onupgradeneeded=()=>r.result.createObjectStore('photos');r.onsuccess=()=>{this.db=r.result;res(this.db);};r.onerror=()=>rej(r.error);});},
  async set(id,blob){const db=await this.open();return new Promise((res,rej)=>{const tx=db.transaction('photos','readwrite');tx.objectStore('photos').put(blob,id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});},
  async get(id){const db=await this.open();return new Promise((res,rej)=>{const rq=db.transaction('photos').objectStore('photos').get(id);rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>rej(rq.error);});},
  async del(id){const db=await this.open();return new Promise((res,rej)=>{const tx=db.transaction('photos','readwrite');tx.objectStore('photos').delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
@@ -565,8 +596,8 @@ function photoObjUrl(id,blob){if(photoURLs[id])URL.revokeObjectURL(photoURLs[id]
 async function hydratePhotos(root){const imgs=(root||document).querySelectorAll('img[data-pid]:not([src])');
 for(const img of imgs){const pid=img.dataset.pid;try{let u=photoURLs[pid];
  if(!u){
-  const p=prod(pid);let dn={};try{dn=JSON.parse(localStorage.getItem('mahal_photo_dn')||'{}');}catch(e){}
-  if(p&&p.photo&&dn[pid]!==p.photoVer){try{const r=await fetch(SB.photoUrlFor(p));if(r.ok){const b2=await r.blob();await PHOTOS.set(pid,b2);dn[pid]=p.photoVer;localStorage.setItem('mahal_photo_dn',JSON.stringify(dn));}}catch(e){}}
+  const p=prod(pid);let dn={};try{dn=JSON.parse(localStorage.getItem(tenantKey('mahal_photo_dn'))||'{}');}catch(e){}
+  if(p&&p.photo&&dn[pid]!==p.photoVer){try{const r=await fetch(SB.photoUrlFor(p));if(r.ok){const b2=await r.blob();await PHOTOS.set(pid,b2);dn[pid]=p.photoVer;localStorage.setItem(tenantKey('mahal_photo_dn'),JSON.stringify(dn));}}catch(e){}}
   const blob=await PHOTOS.get(pid);
   if(blob){u=photoObjUrl(pid,blob);}
   if(!u){img.replaceWith(imgPhFallback(pid));continue;}}
@@ -627,9 +658,9 @@ async uploadPhoto(id,blob){const r=await fetch((this.cfg.url||SB_DEF.url).replac
  if(!r.ok)throw new Error('photo-upload-failed:'+r.status);},
 async deletePhoto(id){try{await fetch((this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/storage/v1/object/product-photos/'+encodeURIComponent(id)+'.jpg',{method:'DELETE',headers:{'apikey':this.cfg.anon||SB_DEF.anon,'Authorization':'Bearer '+(this.token||this.cfg.anon||SB_DEF.anon)}});}catch(e){}},
 async pushProducts(){await this.ensureSession();
- const ups=JSON.parse(localStorage.getItem('mahal_photo_up')||'{}');
+ const ups=JSON.parse(localStorage.getItem(tenantKey('mahal_photo_up'))||'{}');
  for(const p of DB.products){if(p.photo&&p.photoVer&&ups[p.id]!==p.photoVer){const blob=await PHOTOS.get(p.id);if(blob){await this.uploadPhoto(p.id,blob);ups[p.id]=p.photoVer;}}}
- localStorage.setItem('mahal_photo_up',JSON.stringify(ups));
+ localStorage.setItem(tenantKey('mahal_photo_up'),JSON.stringify(ups));
  if(typeof can==='function'&&can('settings')){
  const info=[{id:1,shop_name:DB.settings.shopName,owner_name:DB.settings.ownerName||'',phone:DB.settings.phone||'',payment:DB.settings.pay||{cash:{on:true}},delivery_fee:DB.settings.deliveryFee||0,zones:DB.settings.zones||[],delivery_on:DB.settings.deliveryOn!==false,updated_at:new Date().toISOString()}];
  try{await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}
@@ -650,19 +681,19 @@ async function pushCloudBackup(keepalive){if(!SB.ready())return;const a=authGet(
  await SB.req('backups',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify([{id:1,data:DB,updated_at:now}]),keepalive:!!keepalive});
  const s=syncGet();s.lastPush=now;if(!s.decided)s.decided=true;delete s.lastErr;syncSet(s);
  if(changedAt&&localStorage.getItem(DIRTY_KEY)===changedAt)localStorage.removeItem(DIRTY_KEY);
- localStorage.setItem('mahal_last_backup',now);
+ localStorage.setItem(tenantKey('mahal_last_backup'),now);
  const el=document.getElementById('bk-status');if(el)el.textContent=backupStatusText();
  }catch(e){try{const s=syncGet();s.lastErr='رفع فشل: '+((e&&e.message)||e);syncSet(s);}catch(_){}}}
 function backupStatusText(){SB.load();if(!(SB.cfg.url&&SB.cfg.anon))return 'حط بيانات الاتصال من قسم المتجر تحت الأول';
  if(!authGet()||!curUser||!curUser.owner)return 'النسخ التلقائي والمزامنة بيشتغلوا لما صاحب المحل يسجل دخوله';
- const t=localStorage.getItem('mahal_last_backup');return t?('آخر نسخة: '+relDate(t)):'المزامنة شغالة — أول نسخة هتترفع بعد أول تعديل';}
+ const t=localStorage.getItem(tenantKey('mahal_last_backup'));return t?('آخر نسخة: '+relDate(t)):'المزامنة شغالة — أول نسخة هتترفع بعد أول تعديل';}
 function syncDiagHTML(){const s=syncGet();const a=authGet();const dirty=!!localStorage.getItem(DIRTY_KEY);
  const row=(k,v)=>`<div class="trow" style="padding:6px 2px"><span class="k">${k}</span><span style="font-weight:700;font-size:12.5px;text-align:left">${v}</span></div>`;
  return `<div class="total-card" style="margin-top:6px">
  ${row('نسخة التطبيق',APP_VER)}
  ${row('الحساب',a&&a.email?esc(a.email):'مفيش — سجّل دخولك')}
  ${row('الصلاحية',curUser?(curUser.owner?'صاحب المحل 👑':'موظف — شغلك بيتزامن مع المالك'):'—')}
- ${row('آخر رفع ناجح',s.lastPush?relDate(s.lastPush):(localStorage.getItem('mahal_last_backup')?relDate(localStorage.getItem('mahal_last_backup')):'لسه'))}
+ ${row('آخر رفع ناجح',s.lastPush?relDate(s.lastPush):(localStorage.getItem(tenantKey('mahal_last_backup'))?relDate(localStorage.getItem(tenantKey('mahal_last_backup'))):'لسه'))}
  ${row('آخر سحب',s.lastPull?relDate(s.lastPull):'لسه')}
  ${row('عمليات مستنية تتزامن',outboxPending()>0?outboxPending().toLocaleString(AR)+' — هتتحاول تاني تلقائي':'لأ ✓')}
  ${s.lastErr?row('آخر خطأ','<span style="color:var(--red)">'+esc(s.lastErr)+'</span>'):''}
@@ -693,7 +724,7 @@ async function syncTick(){lastSyncTick=Date.now();
  if(!SB.ready()||!authGet()||!curUser||syncBusy)return;
  if(document.querySelector('#overlay-root .overlay'))return;
  syncBusy=true;
- try{await SB.ensureSession();
+ try{await SB.ensureSession();await refreshTenant();if(curUser.tenantBlocked){render();syncBusy=false;return;}
   if(curUser.owner){
    const s=syncGet();
    if(!s.decided){
@@ -1654,7 +1685,7 @@ ${paySettingsHTML()}
 <div class="sec-title">النسخ الاحتياطي</div>
 <div class="set-row" style="cursor:default">${ic('lock')}<span>نسخ تلقائي على السحابة<span class="s" style="display:block" id="bk-status">${backupStatusText()}</span></span></div>
 ${syncDiagHTML()}
-<button class="set-row" onclick="pushCloudBackup().then(()=>{toast(localStorage.getItem('mahal_last_backup')?'النسخة اترفعت ✓':'مفيش اتصال — هتترفع لوحدها أول ما النت يشتغل');})">${ic('upload')}<span>ارفع نسخة دلوقتي<span class="s" style="display:block">بتتخزن في مشروع Supabase بتاعك (جدول backups) — فين؟ افتح supabase.com ← مشروعك ← Table Editor ← backups</span></span></button>
+<button class="set-row" onclick="pushCloudBackup().then(()=>{toast(localStorage.getItem(tenantKey('mahal_last_backup'))?'النسخة اترفعت ✓':'مفيش اتصال — هتترفع لوحدها أول ما النت يشتغل');})">${ic('upload')}<span>ارفع نسخة دلوقتي<span class="s" style="display:block">بتتخزن في مشروع Supabase بتاعك (جدول backups) — فين؟ افتح supabase.com ← مشروعك ← Table Editor ← backups</span></span></button>
 <button class="set-row" onclick="restoreCloudBackup()">${ic('down')}<span>رجّع آخر نسخة من السحابة<span class="s" style="display:block">لو الجهاز اتضاع أو البيانات اتمسحت</span></span></button>
 <button class="set-row" onclick="exportData()">${ic('download')}<span>نزّل نسخة ملف على جهازك<span class="s" style="display:block">الملف بينزل في فولدر التنزيلات Downloads — ابعته لنفسك واتساب</span></span></button>
 <button class="set-row" onclick="document.getElementById('imp-file').click()">${ic('upload')}<span>رجّع نسخة من ملف<span class="s" style="display:block">لو غيرت الموبايل أو مسحت المتصفح</span></span></button>
@@ -1818,6 +1849,7 @@ async function printLabels(){const items=Object.keys(labelDraft).filter(pid=>lab
 function go(h){location.hash=h;}
 function render(top){const h=location.hash||'#/';const app=$('#app');
 if(!curUser){app.innerHTML=vLogin();return;}
+if(curUser.tenantBlocked){app.innerHTML='<div class="lockwrap"><div class="lockcard"><h2>الاشتراك موقوف مؤقتًا</h2><p>بياناتك محفوظة. كلم إدارة المنصة للتجديد أو التشغيل.</p><button class="btn btn-p" onclick="location.reload()">تحقق من التجديد</button><button class="btn" onclick="logout()">خروج</button></div></div>';return;}
 let html;
 if(h==='#/'||h==='#'){closeSheet();html=vDash();}
 else if(h==='#/products'){html=can('products')?vProducts():vNoPerm();}
@@ -1849,7 +1881,7 @@ window.addEventListener('hashchange',()=>{render(true);});
 setInterval(()=>{if(document.visibilityState==='visible')syncTick();},10000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncTick();else if(localStorage.getItem(DIRTY_KEY))pushCloudBackup(true);});
 window.addEventListener('pagehide',()=>{if(localStorage.getItem(DIRTY_KEY))pushCloudBackup(true);});
-render();
+const savedLogin=curUser;curUser=null;render();if(savedLogin)fetchMyRole().then(u=>u&&loginOk(u)).catch(()=>{curUser=null;render();});
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});
  navigator.serviceWorker.addEventListener('controllerchange',function(){if(!window.__reloaded){window.__reloaded=true;window.__updating=true;location.reload();}});}
 </script>

@@ -1,0 +1,1 @@
+BEGIN; DROP INDEX public.invoices_num_key; CREATE UNIQUE INDEX invoices_num_key ON public.invoices(tenant_id,num); COMMIT;

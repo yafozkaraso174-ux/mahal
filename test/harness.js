@@ -124,7 +124,7 @@ const w=dom.window;
 /* indexedDB stub */
 const idbStore=new Map();
 const req=(fn)=>{const r={};setTimeout(()=>{try{r.result=fn();r.onsuccess&&r.onsuccess();}catch(e){r.error=e;r.onerror&&r.onerror();}},0);return r;};
-w.indexedDB={open:()=>{const r={};setTimeout(()=>{r.result={objectStoreNames:{contains:()=>true},transaction:()=>({objectStore:()=>({put:(v,k)=>{idbStore.set(k,v);},get:(k)=>req(()=>idbStore.get(k)||null),delete:(k)=>{idbStore.delete(k);}}),set oncomplete(f){setTimeout(f,0);},set onerror(f){}})},r.onsuccess&&r.onsuccess();},0);return r;}};
+w.indexedDB={open:()=>{const r={};setTimeout(()=>{r.result={close(){},objectStoreNames:{contains:()=>true},transaction:()=>({objectStore:()=>({put:(v,k)=>{idbStore.set(k,v);},get:(k)=>req(()=>idbStore.get(k)||null),delete:(k)=>{idbStore.delete(k);}}),set oncomplete(f){setTimeout(f,0);},set onerror(f){}})},r.onsuccess&&r.onsuccess();},0);return r;}};
 w.URL.createObjectURL=()=>'blob:mock';w.URL.revokeObjectURL=()=>{};
 w.HTMLCanvasElement.prototype.getContext=function(){return {fillStyle:'',direction:'',textAlign:'',font:'',lineWidth:0,strokeStyle:'',setLineDash(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillRect(){},fillText(){}};};
 w.HTMLCanvasElement.prototype.toBlob=function(cb){cb(new w.Blob([]));};
@@ -147,7 +147,7 @@ w.localStorage.setItem('mahal_shop_cfg',JSON.stringify({url:'https://mock.supaba
 w.localStorage.setItem('mahal_auth',JSON.stringify({access_token:'tok',refresh_token:'ref',expires_at:Math.floor(Date.now()/1000)+3600,uid:'owner-uid',email:'owner@x.com'}));
 w.localStorage.setItem('mahal_sync_v1',JSON.stringify({decided:true,lastPull:nowIso,lastPush:nowIso}));
 w.localStorage.setItem('mahal_sync2_v1',JSON.stringify({products:nowIso,customers:nowIso,suppliers:nowIso,invoices:nowIso,purchases:nowIso,payments:nowIso,movements:nowIso}));
-w.sessionStorage.setItem('mahal_cur',JSON.stringify({id:'u1',name:'صاحب المحل',owner:true,authId:'owner-uid',perms:{}}));
+// Unit fixtures install a validated role below; real login/tenant switching is tested separately.
 
 const ctx=dom.getInternalVMContext();
 const vm=require('vm');
@@ -155,6 +155,7 @@ vm.runInContext(appJS,ctx);
 
 const ev=(c)=>vm.runInContext(c,ctx);const G=(n)=>ev(n);
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+ev("curUser={id:'u1',name:'صاحب المحل',owner:true,authId:'owner-uid',perms:{}}");
 
 (async()=>{
  await sleep(50);
@@ -679,6 +680,22 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('no refetch when version same',ev('window.__fcount')===0);
  t('cached blob used',ev(`document.getElementById('pv4b').src`)==='blob:mock');
 
+
+ /* Tenant switch isolation. Unit fixtures above intentionally use legacy keys. */
+ ev(`activateTenant({tenantId:'tenant-unit-a'});curUser={owner:true,tenantId:'tenant-unit-a'};DB.products.push({id:'only-a',name:'A'});localStorage.setItem(KEY,JSON.stringify(DB));outboxSet([{qid:'a',rowId:'only-a'}]);sync2Set({products:'2026'});`);
+ ev(`activateTenant({tenantId:'tenant-unit-b'});curUser={owner:true,tenantId:'tenant-unit-b'};`);
+ t('new tenant has empty products',ev('DB.products.length')===0);
+ t('new tenant has empty invoices',ev('DB.invoices.length')===0);
+ t('new tenant has no prior outbox',ev('outboxGet().length')===0);
+ t('new tenant has fresh cursor',ev('Object.keys(sync2Get()).length')===0);
+ t('new tenant does not seed demo customers',ev('DB.customers.length')===0);
+ t('new tenant skips legacy migration upload',ev('DB.settings.migratedV2')===true);
+ ev(`activateTenant({tenantId:'tenant-unit-a'});curUser={owner:true,tenantId:'tenant-unit-a'};`);
+ t('switch back restores only own products',ev('DB.products.length')===1&&ev('DB.products[0].id')==='only-a');
+ t('switch back restores own queue',ev('outboxGet()[0].qid')==='a');
+ t('photo versions are tenant-scoped',ev("tenantKey('mahal_photo_dn')")==='mahal_photo_dn_tenant-unit-a');
+ t('blocked tenant render hides data',ev(`curUser.tenantBlocked=true;render();document.getElementById('app').innerText||document.getElementById('app').textContent`).includes('الاشتراك موقوف'));
+ t('blocked tenant cannot flush',ev('flushOutbox.toString()').includes('curUser.tenantBlocked'));
 
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
