@@ -625,6 +625,13 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  await ev(`printLabels()`);
  t('labels medium size',ev(`document.getElementById('print-area').innerHTML.includes('70mm')`)===true);
  t('label preview html',ev(`labelPreviewHTML(DB.products.find(p=>p.id==='bp3'))`).includes('pl-bc'));
+ ev(`window.__rc=0;render=(function(_r){return function(t){window.__rc++;return _r(t);};})(render)`);
+ ev(`location.hash='#/labels'`);
+ await new Promise(r=>setTimeout(r,150));
+ ev(`window.__rc=0;vLabels()`);
+ await new Promise(r=>setTimeout(r,150));
+ t('vLabels no self-render loop when lib present',ev('window.__rc')===0);
+ ev(`location.hash='#/'`);
 
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
