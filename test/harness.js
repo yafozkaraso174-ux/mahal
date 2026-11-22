@@ -568,6 +568,41 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('saveProduct stores barcode',ev(`DB.products.find(p=>p.id==='bp3').barcode`)==='111222333');
  ev(`closeSheet()`);
 
+ /* ---- stage: barcode scanning ---- */
+ t('pick sheet has camera button',ev(`vInvoice(null)`).length>0&&ev(`openPickProduct();document.querySelector('.overlay').innerHTML.includes('openScanSheet')`)===true);
+ ev(`closeSheet()`);
+ ev(`invDraft={customerId:'c1',priceType:'w',items:[],paid:'',disc:'',tax:'',useCredit:true,_preset:null}`);
+ ev(`location.hash='#/invoice'`);
+ ev(`scanCtx={mode:'invoice'}`);
+ ev(`sheet('امسح باركود','<div id="scan-stage"></div>')`);
+ ev(`scanResultCard('111222333')`);
+ t('scan result card found',ev(`document.getElementById('scan-stage').innerHTML.includes('اتلاقى: صنف باركود')`)===true);
+ const beforeItems=ev('invDraft.items.length');
+ ev(`scanAddToInvoice('bp3')`);
+ t('scan add to invoice',ev('invDraft.items.length')===beforeItems+1&&ev(`invDraft.items[invDraft.items.length-1].productId`)==='bp3');
+ t('scan added card',ev(`document.getElementById('scan-stage').innerHTML.includes('اتضاف للفاتورة')`)===true);
+ ev(`scanResultCard('0000000000000')`);
+ t('scan result card not found',ev(`document.getElementById('scan-stage').innerHTML.includes('مش متسجل')`)===true);
+ ev(`scanNewProduct()`);
+ t('scan new product prefills barcode',ev(`document.getElementById('fp-barcode').value`)==='0000000000000');
+ ev(`closeSheet()`);
+ /* wedge: fast digits + enter outside fields */
+ ev(`lastScanCode='';wedgeBuf=''`);
+ for(const ch of '111222333'){ev(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'${ch}',bubbles:true}))`);}
+ ev(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`);
+ t('wedge adds to invoice (bumps qty)',ev('invDraft.items.length')===beforeItems+1&&ev(`invDraft.items.find(x=>x.productId==='bp3').qty`)===2);
+ /* wedge slow typing must not trigger */
+ ev(`invDraft.items=[];wedgeBuf=''`);
+ ev(`wedgeAt=Date.now()-500;document.dispatchEvent(new KeyboardEvent('keydown',{key:'1',bubbles:true}))`);
+ ev(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))`);
+ t('wedge ignores slow single key',ev('invDraft.items.length')===0);
+ ev(`closeSheet();invDraft=null;location.hash='#/'`);
+ t('scan link list renders',ev(`scanLinkListHTML('').includes('صنف باركود')`)===true);
+ t('offerScanLink opens sheet',ev(`offerScanLink('777');document.querySelector('.overlay').innerHTML.includes('سجّله كصنف جديد')`)===true);
+ ev(`assignBarcode('szp1')`);
+ t('assignBarcode stores',ev(`DB.products.find(p=>p.id==='szp1').barcode`)==='777');
+ ev(`closeSheet()`);
+
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
  process.exit(0);
