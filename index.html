@@ -534,7 +534,7 @@ let curUser=null;
 function savedUserGet(){try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||localStorage.getItem('mahal_cur_ls')||'null');const a=authGet();return cu&&cu.authId&&a&&a.uid===cu.authId?cu:null;}catch(e){return null;}}
 try{const cu=savedUserGet();if(cu)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r40';
+const APP_VER='2026-11-22r41';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -1741,6 +1741,9 @@ render();toast('اتحفظ ✓');}
 /* ============ settings ============ */
 const SB_DEF={url:'https://ofqhrpkgxxbdrhuujgxt.supabase.co',anon:'sb_publishable_CH8nhDJQlV-5xsKYoCZRVg_mUoLsTQw'};
 function storeUrl(){const u=(location.origin||'')+String(location.pathname||'/').replace(/[^/]*$/,'')+'store.html';const t=curUser?.tenantId;return !t||t==='5336a072-d9eb-43d9-ac91-4d9d6572b781'?u:u+'?shop='+encodeURIComponent(t);}
+function shopAppUrl(){return new URL('index.html',location.href).href;}
+function copyAppLink(){const u=shopAppUrl();if(navigator.clipboard?.writeText)navigator.clipboard.writeText(u).then(()=>toast('رابط البرنامج اتنسخ')).catch(()=>prompt('انسخ رابط البرنامج:',u));else prompt('انسخ رابط البرنامج:',u);}
+function myShopLinksHTML(){if(!curUser?.tenantId)return '';return `<div class="card"><h3>روابط محلك</h3><div class="field"><label class="lbl" for="my-store-link">متجر الزباين الخاص بمحلك</label><input id="my-store-link" value="${esc(storeUrl())}" readonly dir="ltr" style="text-align:left;font-size:12px" onclick="this.select()"></div><div style="display:flex;gap:8px"><button class="btn btn-p" style="flex:1" onclick="copyStoreLink()">نسخ رابط المتجر</button><a class="btn" style="flex:1;text-align:center;background:var(--card);border:1px solid var(--line);text-decoration:none;color:var(--text)" href="${esc(storeUrl())}" target="_blank" rel="noopener noreferrer">فتح المتجر ↗</a></div><div class="field" style="margin-top:16px"><label class="lbl" for="my-app-link">برنامج إدارة المحل</label><input id="my-app-link" value="${esc(shopAppUrl())}" readonly dir="ltr" style="text-align:left;font-size:12px" onclick="this.select()"></div><div style="display:flex;gap:8px"><button class="btn btn-p" style="flex:1" onclick="copyAppLink()">نسخ رابط البرنامج</button><a class="btn" style="flex:1;text-align:center;background:var(--card);border:1px solid var(--line);text-decoration:none;color:var(--text)" href="${esc(shopAppUrl())}" target="_blank" rel="noopener noreferrer">فتح البرنامج ↗</a></div><p class="note">رابط البرنامج موحّد. سجّل دخول بإيميلك عشان تفتح محلك بس. الرابط مش بيدخل أي شخص على حسابك تلقائيًا.</p></div>`;}
 function shopSettingsHTML(){SB.load();const c=SB.cfg||{};const sUrl=storeUrl();
 if(!SB.ready()){return `<div class="set-row" style="cursor:default"><span style="font-weight:600;color:var(--muted);font-size:12px;line-height:1.8">حط بيانات مشروع Supabase هنا مرة واحدة، والمتجر هيشتغل لوحده. البيانات دي بتتخزن على جهازك بس.</span></div>
 <div class="field"><div class="lbl">رابط المشروع (Project URL)</div><input id="sb-url" value="${esc(c.url||SB_DEF.url)}" placeholder="https://xxxx.supabase.co" style="direction:ltr;text-align:left" autocomplete="off"></div>
@@ -1779,6 +1782,7 @@ ${full?`<div class="field"><div class="lbl">اسم المحل</div><input id="st
 <div class="field"><div class="lbl">اسمك (للتحية في الرئيسية)</div><input id="st-owner" value="${esc(DB.settings.ownerName||'')}" placeholder="الحاج محمود"></div>
 <div class="field"><div class="lbl">موبايل المحل (واتساب — بيظهر للزباين في المتجر)</div><input id="st-phone" value="${esc(DB.settings.phone||'')}" placeholder="01xxxxxxxxx" inputmode="tel" style="direction:ltr;text-align:right"></div>
 <button class="btn btn-p" style="width:100%" onclick="DB.settings.shopName=$('#st-shop').value.trim()||'محلي';DB.settings.ownerName=$('#st-owner').value.trim();DB.settings.phone=$('#st-phone').value.trim();save();render();toast('اتحفظ ✓')">حفظ ✓</button>
+${myShopLinksHTML()}
 <div class="sec-title">المتجر الإلكتروني</div>
 ${shopSettingsHTML()}
 <div class="sec-title" style="font-size:13px;margin-top:2px">الدليفري</div>
