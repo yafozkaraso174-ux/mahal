@@ -1,5 +1,5 @@
-import subprocess,json,concurrent.futures
-cmd=['psql','-h','/tmp/ownerpg','-p','55432','-d','postgres','-At','-v','ON_ERROR_STOP=1']
+import subprocess,json,concurrent.futures,os
+cmd=['psql','-h','/tmp/ownerpg','-p','55432','-d',os.environ.get('PGDATABASE','postgres'),'-At','-v','ON_ERROR_STOP=1']
 def q(s):return subprocess.run(cmd,input=s,text=True,capture_output=True)
 def admin(p):return q("set role authenticated;select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);select admin_invite_action('"+json.dumps(p)+"');")
 p=dict(id='00000000-0000-0000-0000-000000005000',action='invite',token='ab'*32,name='race shop',email='race@example.test',shopType='mobile',months=1,price=300)

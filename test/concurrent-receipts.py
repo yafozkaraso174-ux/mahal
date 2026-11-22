@@ -1,6 +1,6 @@
 # Requires an isolated local PostgreSQL database seeded with mobile-schema.sql.
-import subprocess,json,concurrent.futures
-cmd=['psql','-h','/tmp/ownerpg','-p','55432','-d','mobile_races','-At','-v','ON_ERROR_STOP=1']
+import subprocess,json,concurrent.futures,os
+cmd=['psql','-h','/tmp/ownerpg','-p','55432','-d',os.environ.get('PGDATABASE','mobile_races'),'-At','-v','ON_ERROR_STOP=1']
 def query(sql):return subprocess.run(cmd,input=sql,text=True,capture_output=True)
 def call(p):return query("set role authenticated;select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);select record_payment('"+json.dumps(p,ensure_ascii=False)+"'::jsonb);")
 p=dict(id='concurrent-old-1',partyId='c',partyType='c',kind='in',amount=1000,note='قسط عقد تقسيط #110',method='كاش')

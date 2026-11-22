@@ -5,7 +5,7 @@ create table if not exists public.mobile_receipt_ops(tenant_id uuid not null ref
 alter table public.mobile_receipt_ops enable row level security;
 revoke all on public.mobile_receipt_ops from public,anon,authenticated;
 create or replace function public.mobile_receive_payment(p jsonb) returns jsonb language plpgsql security definer set search_path=public as $$
-declare tid uuid:=my_tenant();cid text:=p->>'customerId';pid text:=p->>'id';ct text:=nullif(p->>'contractId','');a numeric:=(p->>'amount')::numeric;bal numeric;leftamt numeric;remaining numeric;need numeric;take numeric;sc jsonb:='[]';x jsonb;c installment_contracts%rowtype;old mobile_receipt_ops%rowtype;r jsonb;pay payments%rowtype;
+declare tid uuid:=my_tenant();cid text:=p->>'customerId';pid text:=p->>'id';ct text:=nullif(p->>'contractId','');a numeric:=(p->>'amount')::numeric;bal numeric;leftamt numeric;remaining numeric;need numeric;take numeric;sc jsonb:='[]';x jsonb;c installment_contracts%rowtype;old mobile_receipt_ops%rowtype;r jsonb;pay payments%rowtype;funded numeric;allocated numeric;extra numeric;
 begin
  if tid is null or not tenant_active() or not exists(select 1 from tenants where id=tid and shop_type='mobile') then raise exception 'mobile tenant inactive';end if;
  if not(has_shop_perm('invoice') or has_shop_perm('customers')) then raise exception 'no permission';end if;
@@ -24,9 +24,23 @@ begin
   select * into c from installment_contracts where tenant_id=tid and id=ct and not coalesce(deleted,false) for update;
   if not found or c.data->>'customerId' is distinct from cid then raise exception 'contract mismatch';end if;
   if not exists(select 1 from invoices where tenant_id=tid and id=c.data->>'invoiceId' and customer_id=cid) then raise exception 'invoice missing';end if;
+  if p->'expectedSchedule' is distinct from c.data->'schedule' then raise exception 'contract changed, refresh';end if;
+  -- A pre-upgrade receipt may have saved while its old schedule snapshot is still offline.
+  -- Use real uniquely matched receipts as a paid floor before adding this receipt.
+  select coalesce(sum(amount),0) into funded from payments where tenant_id=tid and kind='in' and party_type='c' and party_id=cid and (contract_id=ct or (contract_id is null and note='قسط عقد تقسيط #'||(c.data->>'invoiceNum') and (select count(*) from installment_contracts z where z.tenant_id=tid and not z.deleted and z.data->>'customerId'=cid and z.data->>'invoiceNum'=c.data->>'invoiceNum')=1));
+  select coalesce(sum(coalesce((v->>'paidAmt')::numeric,0)),0) into allocated from jsonb_array_elements(c.data->'schedule')v;
+  extra:=greatest(0,funded-allocated);
+  if extra>0 then
+   for x in select value from jsonb_array_elements(c.data->'schedule') loop
+    need:=greatest(0,(x->>'amt')::numeric-coalesce((x->>'paidAmt')::numeric,0));take:=least(need,extra);extra:=extra-take;
+    if take>0 then x:=x||jsonb_build_object('paidAmt',coalesce((x->>'paidAmt')::numeric,0)+take);if take=need then x:=x||jsonb_build_object('paidAt',now());end if;end if;
+    sc:=sc||jsonb_build_array(x);
+   end loop;
+   if extra>0 then raise exception 'legacy receipts exceed contract';end if;
+   c.data:=jsonb_set(c.data,'{schedule}',sc);sc:='[]'::jsonb;
+  end if;
   select coalesce(sum(greatest(0,(v->>'amt')::numeric-coalesce((v->>'paidAmt')::numeric,0))),0) into leftamt from jsonb_array_elements(c.data->'schedule') v;
   if a>round(leftamt,2) then raise exception 'amount exceeds contract balance';end if;
-  if p->'expectedSchedule' is distinct from c.data->'schedule' then raise exception 'contract changed, refresh';end if;
   remaining:=a;
   for x in select value from jsonb_array_elements(c.data->'schedule') loop
    need:=greatest(0,(x->>'amt')::numeric-coalesce((x->>'paidAmt')::numeric,0));take:=least(need,remaining);remaining:=remaining-take;
@@ -38,7 +52,7 @@ begin
  end if;
  if coalesce(p->>'method','') not in('كاش','إنستاباي','فودافون كاش','تحويل بنكي') then raise exception 'invalid method';end if;
  perform set_config('mahal.atomic_receipt','yes',true);
- insert into payments(id,tenant_id,date,kind,party_type,party_id,amount,note,method,contract_id,created_by) values(pid,tid,now(),'in','c',cid,a,left(coalesce(p->>'note',''),500),p->>'method',ct,auth.uid()) returning * into pay;
+ insert into payments(id,tenant_id,date,kind,party_type,party_id,amount,note,method,contract_id,created_by) values(pid,tid,coalesce((p->>'receiptDate')::timestamptz,now()),'in','c',cid,a,left(coalesce(p->>'note',''),500),p->>'method',ct,auth.uid()) returning * into pay;
  r:=jsonb_build_object('payment',to_jsonb(pay),'contract',case when ct is not null then (select data from installment_contracts where id=ct and tenant_id=tid) else null end,'balance',round(bal-a,2));
  insert into mobile_receipt_ops values(tid,pid,auth.uid(),p,r);return r;
 end $$;

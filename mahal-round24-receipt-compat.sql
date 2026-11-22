@@ -16,7 +16,7 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(tid::text||(p->>'id'),0));
   select * into prior from mobile_receipt_ops where tenant_id=tid and id=p->>'id';
   if found then
-   if prior.request->>'customerId' is distinct from p->>'partyId' or (prior.request->>'amount')::numeric is distinct from (p->>'amount')::numeric or prior.request->>'note' is distinct from p->>'note' or prior.request->>'method' is distinct from p->>'method' then raise exception 'legacy receipt conflict';end if;
+   if prior.request->>'customerId' is distinct from p->>'partyId' or (prior.request->>'amount')::numeric is distinct from (p->>'amount')::numeric or prior.request->>'note' is distinct from p->>'note' or prior.request->>'method' is distinct from coalesce(nullif(p->>'method',''),'كاش') or prior.request->>'receiptDate' is distinct from p->>'date' then raise exception 'legacy receipt conflict';end if;
    r:=mobile_receive_payment(prior.request);return r->'payment';
   end if;
   -- Preserve old successful payment retries from before this migration.
@@ -25,7 +25,7 @@ begin
   select count(*) into cnt from installment_contracts where tenant_id=tid and not deleted and data->>'customerId'=p->>'partyId' and data->>'invoiceNum'=substring(p->>'note' from length('قسط عقد تقسيط #')+1);
   if cnt<>1 then raise exception 'legacy contract needs review';end if;
   select * into ct from installment_contracts where tenant_id=tid and not deleted and data->>'customerId'=p->>'partyId' and data->>'invoiceNum'=substring(p->>'note' from length('قسط عقد تقسيط #')+1) for update;
-  q:=jsonb_build_object('id',p->>'id','customerId',p->>'partyId','amount',(p->>'amount')::numeric,'method',coalesce(nullif(p->>'method',''),'كاش'),'note',p->>'note','contractId',ct.id,'expectedSchedule',ct.data->'schedule');
+  q:=jsonb_build_object('id',p->>'id','customerId',p->>'partyId','amount',(p->>'amount')::numeric,'method',coalesce(nullif(p->>'method',''),'كاش'),'note',p->>'note','contractId',ct.id,'expectedSchedule',ct.data->'schedule','receiptDate',p->>'date');
   r:=mobile_receive_payment(q);return r->'payment';
  end if;
  return record_payment_legacy(p);
@@ -48,7 +48,7 @@ begin
   select coalesce(sum(coalesce((v->>'paidAmt')::numeric,0)),0) into proposed_paid from jsonb_array_elements(newsch)v;
   if proposed_paid>current_paid then
    -- Handles a receipt that saved before upgrade while its offline schedule update is still queued.
-   select coalesce(sum(amount),0) into funded from payments where tenant_id=old.tenant_id and kind='in' and party_type='c' and party_id=old.data->>'customerId' and (contract_id=old.id or (contract_id is null and note='قسط عقد تقسيط #'||(old.data->>'invoiceNum')));
+   select coalesce(sum(amount),0) into funded from payments where tenant_id=old.tenant_id and kind='in' and party_type='c' and party_id=old.data->>'customerId' and (contract_id=old.id or (contract_id is null and note='قسط عقد تقسيط #'||(old.data->>'invoiceNum') and (select count(*) from installment_contracts z where z.tenant_id=old.tenant_id and not z.deleted and z.data->>'customerId'=old.data->>'customerId' and z.data->>'invoiceNum'=old.data->>'invoiceNum')=1));
    if proposed_paid>funded then raise exception 'legacy schedule not funded by receipts';end if;
    delta:=proposed_paid-current_paid;merged:='[]'::jsonb;
    for x in select value from jsonb_array_elements(oldsch) loop
