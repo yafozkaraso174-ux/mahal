@@ -78,8 +78,8 @@ button.row{cursor:pointer}
 .field .lbl{font-size:12.5px;font-weight:800;margin-bottom:6px}
 .field input,.field select,.field textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14px;color:var(--ink);outline:none}
 .field input:focus,.field select:focus{border-color:var(--green)}
-.seg{display:flex;background:#EDE7DA;border-radius:12px;padding:3px}
-.seg button{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:800;color:var(--muted);border-radius:9px}
+.seg{display:flex;flex-wrap:wrap;background:#EDE7DA;border-radius:12px;padding:3px}
+.seg button{flex:1 1 auto;min-width:0;white-space:nowrap;text-align:center;padding:9px 8px;font-size:13px;font-weight:800;color:var(--muted);border-radius:9px}
 .seg button.on{background:var(--card);color:var(--green);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .item-row{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .item-row .qty{display:flex;align-items:center;gap:9px;background:#F1ECE1;border-radius:10px;padding:5px 9px}
@@ -341,8 +341,8 @@ const ENT={
   map:x=>({id:x.id,day:x.day,closed_at:x.closedAt||new Date().toISOString(),opening:x.opening||0,expected:x.expected||0,actual:x.actual||0,diff:x.diff||0,payload:x.payload||{},note:x.note||''}),
   unmap:r=>({id:r.id,day:r.day,closedAt:r.closed_at,opening:num(r.opening),expected:num(r.expected),actual:num(r.actual),diff:num(r.diff),payload:r.payload||{},note:r.note||''})},
  serviceTxns:{table:'service_txns',ts:'updated_at',perms:['invoice','stats'],
-  map:x=>({id:x.id,date:x.date,kind:x.kind||'تحويل',service:x.service||'',amount:x.amount||0,fee:x.fee||0,customer_name:x.customerName||'',customer_phone:x.customerPhone||'',note:x.note||'',updated_at:new Date().toISOString()}),
-  unmap:r=>({id:r.id,date:r.date,kind:r.kind||'تحويل',service:r.service||'',amount:num(r.amount),fee:num(r.fee),customerName:r.customer_name||'',customerPhone:r.customer_phone||'',note:r.note||''})}
+  map:x=>({id:x.id,date:x.date,kind:x.kind||'تحويل',service:x.service||'',network:x.network||'',amount:x.amount||0,fee:x.fee||0,customer_name:x.customerName||'',customer_phone:x.customerPhone||'',note:x.note||'',updated_at:new Date().toISOString()}),
+  unmap:r=>({id:r.id,date:r.date,kind:r.kind||'تحويل',service:r.service||'',network:r.network||'',amount:num(r.amount),fee:num(r.fee),customerName:r.customer_name||'',customerPhone:r.customer_phone||'',note:r.note||''})}
 };
 const ENT_ORDER=['products','customers','suppliers','invoices','purchases','payments','movements','returns','expenses','drawer','dayCloses','serviceTxns'];
 function sync2Get(){try{return JSON.parse(localStorage.getItem(SYNC2_KEY)||'{}');}catch(e){return{};}}
@@ -433,7 +433,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r24';
+const APP_VER='2026-11-22r25';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -1390,18 +1390,19 @@ payload:{sales:c.dc.sales,count:c.dc.count,cash:c.dc.cash,transfer:c.dc.transfer
 DB.dayCloses.push(x);save();enqueue({type:'closeDay',table:'day_closes',rowId:x.id,payload:x});
 closeSheet();render();toast(diff===0?'اليوم اتقفل مظبوط ✓':'اليوم اتقفل — الفرق متسجل');}
 /* ============ الخدمات (agent services) ============ */
-const SVC_KINDS=['فودافون كاش','انستاباي','كارت شحن','شحن رصيد','أخرى'];
+const SVC_KINDS=['فودافون كاش','انستاباي','كارت شحن','كارت كهرباء','شحن رصيد','أخرى'];
+const SVC_UTILS=['كهرباء','مياه','غاز'];
 function floatBalance(){let f=0;DB.serviceTxns.forEach(x=>{if(x.kind==='إرسال')f-=x.amount||0;else f+=x.amount||0;});return Math.round(f*100)/100;}
 function vServices(){const cur=DB.settings.currency||'جنيه';const isD=iso=>new Date(iso).toDateString()===new Date().toDateString();
 const today=DB.serviceTxns.filter(x=>isD(x.date)&&x.kind!=='تسوية').sort((a,b)=>new Date(b.date)-new Date(a.date));
 const feesToday=today.reduce((s,x)=>s+(x.fee||0),0);
 const t=totals();const fl=floatBalance();
-const svcEmoji=x=>x.kind==='استقبال'?'📲':(x.service==='كارت شحن'?'💳':'📱');
+const svcEmoji=x=>x.kind==='استقبال'?'📲':(x.service==='كارت كهرباء'?'⚡':(x.service==='كارت شحن'?'💳':'📱'));
 return appbar('خدمات فودافون كاش والشحن',new Date().toLocaleDateString(AR,{weekday:'long',day:'numeric',month:'long'}),`<button class="avatar" style="background:var(--blue)" onclick="openServiceSheet()">${ic('plus',22)}</button>`)+`
 <div class="content">
 <div class="stat hero" style="margin-top:8px"><div class="lbl">عمولات النهارده</div><div class="val">${fmt(feesToday)} <small>${cur}</small></div><div class="sub">دخل صافي للمحل — بيتسجل في الربح وكشف اليوم${t.feeMonth?` · الشهر ده ${fmt(t.feeMonth)} ج`:''}</div></div>
 <div class="sec-title">عمليات النهارده</div>
-${today.length?today.map(x=>`<div class="row"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${svcEmoji(x)}</div><div class="mid"><div class="t">${esc(x.kind)} ${esc(x.service)} ${fmt(x.amount)} ج</div><div class="s">${relDate(x.date)}${x.customerName?' · '+esc(x.customerName):''}${x.customerPhone?' · '+esc(x.customerPhone):''}${x.note?' · '+esc(x.note):''}</div></div><div class="end"><div class="amt" style="color:var(--green)">+${fmt(x.fee)} <small>ج عمولة</small></div></div><button style="color:var(--muted);padding:6px" onclick="delService('${x.id}')">${ic('trash',18)}</button></div>`).join(''):`<div class="empty"><div class="big">مفيش عمليات النهارده</div>سجّل أول عملية من الزرار اللي فوق</div>`}
+${today.length?today.map(x=>`<div class="row"><div class="ic" style="background:var(--blue-soft);color:var(--blue)">${svcEmoji(x)}</div><div class="mid"><div class="t">${esc(x.kind)} ${esc(x.service)}${x.network&&!(x.service==='كارت كهرباء'&&x.network==='كهرباء')?' '+esc(x.network):''} ${fmt(x.amount)} ج</div><div class="s">${relDate(x.date)}${x.customerName?' · '+esc(x.customerName):''}${x.customerPhone?' · '+esc(x.customerPhone):''}${x.note?' · '+esc(x.note):''}</div></div><div class="end"><div class="amt" style="color:var(--green)">+${fmt(x.fee)} <small>ج عمولة</small></div></div><button style="color:var(--muted);padding:6px" onclick="delService('${x.id}')">${ic('trash',18)}</button></div>`).join(''):`<div class="empty"><div class="big">مفيش عمليات النهارده</div>سجّل أول عملية من الزرار اللي فوق</div>`}
 <button class="btn btn-p" style="width:100%;margin-top:6px" onclick="openServiceSheet()">${ic('plus',16)} عملية جديدة (تحويل / كارت / شحن رصيد)</button>
 <div class="card" style="margin-top:14px">
 <div class="trow" style="padding:8px 2px"><span class="k">رصيد الفلوت (فلوس الشبكة)</span><b style="font-size:16px">${fmt(fl)} ج</b></div>
@@ -1413,8 +1414,13 @@ function openServiceSheet(){sheet('عملية جديدة',`
 <div class="field"><div class="lbl">نوع العملية</div><div class="seg" id="sv-kind">
 <button class="on" data-v="إرسال" onclick="segPick(this);svcHint()">إرسال / شحن 📱</button>
 <button data-v="استقبال" onclick="segPick(this);svcHint()">استقبال تحويل 📲</button></div></div>
-<div class="field"><div class="lbl">الخدمة</div><div class="seg" id="sv-service" style="flex-wrap:wrap">
-${SVC_KINDS.map((s,i)=>`<button${i===0?' class="on"':''} data-v="${s}" onclick="segPick(this)">${s}</button>`).join('')}</div></div>
+<div class="field"><div class="lbl">الخدمة</div><div class="seg" id="sv-service">
+${SVC_KINDS.map((s,i)=>`<button${i===0?' class="on"':''} data-v="${s}" onclick="segPick(this);svcServiceUI()">${s}</button>`).join('')}</div></div>
+<div class="field" id="sv-net-wrap" style="display:none"><div class="lbl">الشبكة</div><div class="seg" id="sv-net">
+${['فودافون','اتصالات','أورانج','وي'].map((s,i)=>`<button${i===0?' class="on"':''} data-v="${s}" onclick="segPick(this)">${s}</button>`).join('')}</div></div>
+<div class="field" id="sv-util-wrap" style="display:none"><div class="lbl">نوع الكارت</div><div class="seg" id="sv-util">
+${SVC_UTILS.map((s,i)=>`<button${i===0?' class="on"':''} data-v="${s}" onclick="segPick(this)">${s}</button>`).join('')}</div></div>
+<div class="field" id="sv-note-wrap" style="display:none"><div class="lbl">البيان (الفلوس دي عشان إيه؟)</div><input id="sv-note" placeholder="مثلا: دفع فاتورة كهربا"></div>
 <div class="field"><div class="lbl">المبلغ</div><input id="sv-amt" inputmode="decimal" placeholder="٠" oninput="svcHint()"></div>
 <div class="field"><div class="lbl">العمولة (اللي بيكسبها المحل)</div><input id="sv-fee" inputmode="decimal" placeholder="٠" oninput="svcHint()"></div>
 <div class="field"><div class="lbl">اسم العميل (اختياري)</div><input id="sv-cust"></div>
@@ -1422,6 +1428,11 @@ ${SVC_KINDS.map((s,i)=>`<button${i===0?' class="on"':''} data-v="${s}" onclick="
 <div class="note" id="sv-hint" style="margin:2px 0 8px"></div>
 <button class="btn btn-p" style="width:100%" onclick="saveService()">سجّل العملية ✓</button>`);
 svcHint();setTimeout(()=>$('#sv-amt')?.focus(),60);}
+function svcServiceUI(){const s=$('#sv-service button.on')?.dataset.v||'';
+const nw=$('#sv-net-wrap');const uw=$('#sv-util-wrap');const bw=$('#sv-note-wrap');
+if(nw)nw.style.display=s==='كارت شحن'?'block':'none';
+if(uw)uw.style.display=s==='كارت كهرباء'?'block':'none';
+if(bw)bw.style.display=s==='أخرى'?'block':'none';}
 function svcHint(){const k=$('#sv-kind button.on')?.dataset.v||'إرسال';const a=num($('#sv-amt')?.value),f=num($('#sv-fee')?.value);const el=$('#sv-hint');if(!el)return;
 if(a<=0){el.textContent='';return;}
 el.textContent=k==='استقبال'?('العميل بيبعت '+fmt(a)+' ج على الشبكة — هتديله كاش '+fmt(Math.max(a-f,0))+' ج من الدرج، والفلوت بيزيد '+fmt(a)+' ج'):('العميل بيدفع '+fmt(a+f)+' ج كاش بيدخلوا الدرج — والفلوت بينقص '+fmt(a)+' ج');}
@@ -1429,7 +1440,8 @@ function saveService(){const kind=$('#sv-kind button.on')?.dataset.v||'إرسا�
 const amount=num($('#sv-amt')?.value),fee=num($('#sv-fee')?.value);
 if(amount<=0){toast('اكتب المبلغ');return;}
 if(fee<0){toast('العمولة مش ممكن تكون بالسالب');return;}
-const x={id:uid(),date:new Date().toISOString(),kind,service,amount,fee,customerName:($('#sv-cust')?.value||'').trim(),customerPhone:($('#sv-phone')?.value||'').trim(),note:''};
+const network=service==='كارت شحن'?($('#sv-net button.on')?.dataset.v||'فودافون'):(service==='كارت كهرباء'?($('#sv-util button.on')?.dataset.v||'كهرباء'):'');
+const x={id:uid(),date:new Date().toISOString(),kind,service,network,amount,fee,customerName:($('#sv-cust')?.value||'').trim(),customerPhone:($('#sv-phone')?.value||'').trim(),note:($('#sv-note')?.value||'').trim()};
 DB.serviceTxns.push(x);save();enqueue({type:'service',table:'service_txns',rowId:x.id,payload:x});
 closeSheet();render();toast('العملية اتسجلت ✓');}
 function delService(id){if(!can('del')){toast('مش مسموح ليك تمسح — كلم صاحب المحل');return;}
@@ -1440,7 +1452,7 @@ function openFloatAdjust(){const fl=floatBalance();sheet('سوّي رصيد ال
 <button class="btn btn-p" style="width:100%" onclick="saveFloatAdjust()">سوّي الرصيد ✓</button>`);}
 function saveFloatAdjust(){const fl=floatBalance();const a=num($('#fl-actual')?.value);const diff=Math.round((a-fl)*100)/100;
 if(diff===0){closeSheet();toast('الرصيد مظبوط ✓');return;}
-const x={id:uid(),date:new Date().toISOString(),kind:'تسوية',service:'',amount:diff,fee:0,customerName:'',note:'تسوية رصيد الفلوت'};
+const x={id:uid(),date:new Date().toISOString(),kind:'تسوية',service:'',network:'',amount:diff,fee:0,customerName:'',customerPhone:'',note:'تسوية رصيد الفلوت'};
 DB.serviceTxns.push(x);save();enqueue({type:'service',table:'service_txns',rowId:x.id,payload:x});
 closeSheet();render();toast('الرصيد اتعدل ✓');}
 /* ============ product / party sheets ============ */

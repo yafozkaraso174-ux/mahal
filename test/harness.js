@@ -306,7 +306,7 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('ENT payment carries method',ENT.payments.map({id:'y9',date:nowIso,kind:'in',partyType:'c',partyId:'c1',amount:5,method:'تحويل'}).method==='تحويل');
  t('ENT expenses roundtrip',(r=>r&&r.title==='إيجار'&&r.amount===150&&r.method==='كاش')(ENT.expenses.unmap(ENT.expenses.map({id:'e0',date:nowIso,title:'إيجار',amount:150,method:'كاش',note:''}))));
  t('ENT returns roundtrip',(r=>r&&r.num===3&&r.refundMethod==='رصيد'&&r.total===60)(ENT.returns.unmap(ENT.returns.map({id:'r0',num:3,date:nowIso,invoiceId:'i1',invoiceNum:1001,customerId:'c1',items:[],total:60,refundMethod:'رصيد',note:''}))));
- t('ENT serviceTxns roundtrip',(r=>r&&r.kind==='تحويل'&&r.amount===1000&&r.fee===10&&r.customerPhone==='01012345678')(ENT.serviceTxns.unmap(ENT.serviceTxns.map({id:'st0',date:nowIso,kind:'تحويل',service:'فودافون كاش',amount:1000,fee:10,customerName:'رضا',customerPhone:'01012345678',note:''}))));
+ t('ENT serviceTxns roundtrip',(r=>r&&r.kind==='تحويل'&&r.amount===1000&&r.fee===10&&r.customerPhone==='01012345678'&&r.network==='فودافون')(ENT.serviceTxns.unmap(ENT.serviceTxns.map({id:'st0',date:nowIso,kind:'تحويل',service:'كارت شحن',network:'فودافون',amount:1000,fee:10,customerName:'رضا',customerPhone:'01012345678',note:''}))));
  t('ENT drawer roundtrip',(r=>r&&r.kind==='out'&&r.amount===200)(ENT.drawer.unmap(ENT.drawer.map({id:'d0',date:nowIso,kind:'out',label:'سحب صاحب المحل',amount:200,note:''}))));
  t('ENT dayCloses roundtrip',(r=>r&&r.expected===1850&&r.diff===-30)(ENT.dayCloses.unmap(ENT.dayCloses.map({id:'dc0',day:'2026-11-22',closedAt:nowIso,opening:1000,expected:1850,actual:1820,diff:-30,payload:{},note:''}))));
 
@@ -437,7 +437,44 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('saveService name/phone split',lastSvc.customerName==='رضا'&&lastSvc.customerPhone==='01012345678');
  ev('openServiceSheet()');
  t('service sheet has separate name+phone fields',ev(`!!document.getElementById('sv-cust')&&!!document.getElementById('sv-phone')`)===true);
+ /* conditional fields */
+ t('default service hides conditional fields',ev(`document.getElementById('sv-net-wrap').style.display==='none'&&document.getElementById('sv-util-wrap').style.display==='none'&&document.getElementById('sv-note-wrap').style.display==='none'`));
+ ev(`segPick(document.querySelector('#sv-service button[data-v="كارت شحن"]'));svcServiceUI()`);
+ t('كارت شحن shows network picker only',ev(`document.getElementById('sv-net-wrap').style.display==='block'&&document.getElementById('sv-util-wrap').style.display==='none'&&document.getElementById('sv-note-wrap').style.display==='none'`));
+ ev(`segPick(document.querySelector('#sv-service button[data-v="كارت كهرباء"]'));svcServiceUI()`);
+ t('كارت كهرباء shows utility picker only',ev(`document.getElementById('sv-util-wrap').style.display==='block'&&document.getElementById('sv-net-wrap').style.display==='none'&&document.getElementById('sv-note-wrap').style.display==='none'`));
+ ev(`segPick(document.querySelector('#sv-service button[data-v="أخرى"]'));svcServiceUI()`);
+ t('أخرى shows بيان field only',ev(`document.getElementById('sv-note-wrap').style.display==='block'&&document.getElementById('sv-net-wrap').style.display==='none'&&document.getElementById('sv-util-wrap').style.display==='none'`));
+ /* كارت شحن with network */
+ ev(`segPick(document.querySelector('#sv-service button[data-v="كارت شحن"]'));svcServiceUI();segPick(document.querySelector('#sv-net button[data-v="اتصالات"]'))`);
+ ev(`$('#sv-amt').value='50';$('#sv-fee').value='2'`);
+ ev('saveService()');
+ const cardSvc=ev('DB.serviceTxns[DB.serviceTxns.length-1]');
+ t('saveService stores network for كارت شحن',cardSvc.service==='كارت شحن'&&cardSvc.network==='اتصالات'&&cardSvc.amount===50);
+ t('row shows network',ev(`vServices()`).includes('كارت شحن اتصالات'));
+ ev(`DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!=='${cardSvc.id}')`);
+ /* كارت كهرباء with utility */
+ ev('openServiceSheet()');
+ ev(`segPick(document.querySelector('#sv-service button[data-v="كارت كهرباء"]'));svcServiceUI();segPick(document.querySelector('#sv-util button[data-v="مياه"]'))`);
+ ev(`$('#sv-amt').value='100';$('#sv-fee').value='3'`);
+ ev('saveService()');
+ const utilSvc=ev('DB.serviceTxns[DB.serviceTxns.length-1]');
+ t('saveService stores utility for كارت كهرباء',utilSvc.service==='كارت كهرباء'&&utilSvc.network==='مياه');
+ t('row shows non-default utility',ev(`vServices()`).includes('كارت كهرباء مياه'));
+ ev(`DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!=='${utilSvc.id}')`);
+ /* أخرى with note */
+ ev('openServiceSheet()');
+ ev(`segPick(document.querySelector('#sv-service button[data-v="أخرى"]'));svcServiceUI()`);
+ ev(`$('#sv-amt').value='200';$('#sv-fee').value='5';$('#sv-note').value='دفع فاتورة كهربا'`);
+ ev('saveService()');
+ const otherSvc=ev('DB.serviceTxns[DB.serviceTxns.length-1]');
+ t('saveService stores بيان for أخرى',otherSvc.service==='أخرى'&&otherSvc.note==='دفع فاتورة كهربا'&&otherSvc.network==='');
+ ev(`DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!=='${otherSvc.id}')`);
  ev('closeSheet()');
+ /* seg wraps on narrow screens */
+ t('seg chips wrap not clip',html.includes('.seg{display:flex;flex-wrap:wrap'));
+ t('seg buttons can shrink',html.includes('.seg button{flex:1 1 auto;min-width:0'));
+ t('كارت كهرباء in service kinds',ev('SVC_KINDS').includes('كارت كهرباء'));
  ev(`DB.serviceTxns=DB.serviceTxns.filter(x=>x.id!=='${lastSvc.id}')`);
  t('svcHint send text',(()=>{ev(`openServiceSheet();$('#sv-amt').value='100';$('#sv-fee').value='5';svcHint()`);const ok=ev(`$('#sv-hint').textContent.includes(fmt(105))&&$('#sv-hint').textContent.includes('الدرج')`);ev('closeSheet()');return ok;})());
  /* drawer entry sheet e2e */
