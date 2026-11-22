@@ -633,6 +633,27 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
  t('vLabels no self-render loop when lib present',ev('window.__rc')===0);
  ev(`location.hash='#/'`);
 
+ /* ---- photo bugfix: crop sheet must not kill product sheet ---- */
+ ev(`openProductSheet('bp3')`);
+ t('product sheet open',ev(`document.querySelectorAll('.overlay').length`)===1&&!!ev(`document.getElementById('fp-name')`));
+ ev(`sheet('ظبط الصورة في المربع','<div></div>')`);
+ t('crop sheet stacked',ev(`document.querySelectorAll('.overlay').length`)===2);
+ ev(`crCancel()`);
+ t('crCancel keeps product sheet',ev(`document.querySelectorAll('.overlay').length`)===1&&!!ev(`document.getElementById('fp-name')`));
+ t('crDone uses closeTopSheet',ev('crDone.toString()').includes('closeTopSheet'));
+ ev(`closeSheet()`);
+ t('unmap photo from server photo_url',ev(`ENT.products.unmap({id:'px1',name:'x',cat:'',unit:'قطعة',price:1,wprice:1,cost:1,stock:1,lowat:0,barcode:'',photo_url:'https://x/y.jpg?v=3',updated_at:'2026-01-01'}).photo`)===1);
+ t('unmap keeps local photo flag',ev(`ENT.products.unmap({id:'px1',name:'x',cat:'',unit:'قطعة',price:1,wprice:1,cost:1,stock:1,lowat:0,barcode:'',photo_url:null,updated_at:'2026-01-01'},{photo:1,photoVer:5}).photo`)===1);
+ /* hydratePhotos falls back to storage URL when local blob missing */
+ await ev(`(async()=>{const p=DB.products.find(x=>x.id==='bp3');p.photo=1;p.photoVer=9;await PHOTOS.del('bp3');delete photoURLs['bp3'];
+  window.__oldFetch=window.fetch;window.fetch=async(u)=>({ok:true,blob:async()=>new Blob(['img'],{type:'image/jpeg'})});
+  document.body.insertAdjacentHTML('beforeend','<img id="hyd-t" data-pid="bp3">');
+  await hydratePhotos();
+  window.fetch=window.__oldFetch;})()`);
+ t('hydratePhotos fetches from storage',ev(`document.getElementById('hyd-t').src`)==='blob:mock');
+ t('hydratePhotos cached blob locally',ev(`PHOTOS.get('bp3')`)!==null);
+
+
  console.log('\n'+PASS+' passed, '+FAIL+' failed');
  if(FAIL){console.log('failures:',failures);process.exit(1);}
  process.exit(0);

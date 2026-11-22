@@ -313,7 +313,7 @@ const OUTBOX_KEY='mahal_outbox_v1',SYNC2_KEY='mahal_sync2_v1';
 const ENT={
  products:{table:'products',ts:'updated_at',perms:null,
   map:p=>({id:p.id,name:p.name,cat:p.cat,unit:p.unit,price:p.rPrice,wprice:p.wPrice,cost:p.cost,stock:p.stock,lowat:p.lowAt||0,barcode:p.barcode||'',deleted:!!p.deleted,photo_url:p.photo?SB.photoUrlFor(p):null,updated_at:new Date().toISOString()}),
-  unmap:(r,old)=>({id:r.id,name:r.name,cat:r.cat,unit:r.unit,rPrice:num(r.price),wPrice:num(r.wprice),cost:num(r.cost),stock:num(r.stock),lowAt:num(r.lowat),barcode:r.barcode||'',deleted:!!r.deleted,photo:old&&old.photo,photoVer:old&&old.photoVer})},
+  unmap:(r,old)=>({id:r.id,name:r.name,cat:r.cat,unit:r.unit,rPrice:num(r.price),wPrice:num(r.wprice),cost:num(r.cost),stock:num(r.stock),lowAt:num(r.lowat),barcode:r.barcode||'',deleted:!!r.deleted,photo:(old&&old.photo)||(r.photo_url?1:0),photoVer:(old&&old.photoVer)||(r.photo_url?1:0)})},
  customers:{table:'customers',ts:'updated_at',perms:null,
   map:c=>({id:c.id,name:c.name,phone:c.phone||'',type:c.type||'r',deleted:!!c.deleted,updated_at:new Date().toISOString()}),
   unmap:r=>({id:r.id,name:r.name,phone:r.phone||'',type:r.type||'r',deleted:!!r.deleted})},
@@ -437,7 +437,7 @@ function authSet(a){if(a)localStorage.setItem(AUTH_KEY,JSON.stringify(a));else l
 let curUser=null;
 try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||'null');const a=authGet();if(cu&&cu.authId&&a&&a.uid===cu.authId)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-22r31';
+const APP_VER='2026-11-22r32';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
@@ -559,7 +559,11 @@ const photoURLs={};
 function photoObjUrl(id,blob){if(photoURLs[id])URL.revokeObjectURL(photoURLs[id]);photoURLs[id]=URL.createObjectURL(blob);return photoURLs[id];}
 async function hydratePhotos(root){const imgs=(root||document).querySelectorAll('img[data-pid]:not([src])');
 for(const img of imgs){const pid=img.dataset.pid;try{let u=photoURLs[pid];
- if(!u){const blob=await PHOTOS.get(pid);if(!blob){img.replaceWith(imgPhFallback(pid));continue;}u=photoObjUrl(pid,blob);}
+ if(!u){const blob=await PHOTOS.get(pid);
+  if(blob){u=photoObjUrl(pid,blob);}
+  else{const p=prod(pid);
+   if(p&&p.photo){try{const r=await fetch(SB.photoUrlFor(p));if(r.ok){const b2=await r.blob();await PHOTOS.set(pid,b2);u=photoObjUrl(pid,b2);}}catch(e){}}
+   if(!u){img.replaceWith(imgPhFallback(pid));continue;}}}
  img.src=u;}catch(e){}}
 }
 function imgPhFallback(pid){const p=prod(pid);const d=document.createElement('div');d.className='ic';d.style.cssText='width:38px;height:38px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--green-soft);color:var(--green)';d.innerHTML=ic(catIcon(p?p.cat:''));return d;}
@@ -592,9 +596,9 @@ async function crDone(){const s=cropSt;if(!s)return;const S=640;const c=document
 c.getContext('2d').drawImage(s.bmp,s.x*k,s.y*k,s.bmp.width*s.base*s.zoom*k,s.bmp.height*s.base*s.zoom*k);
 const blob=await new Promise(res=>c.toBlob(res,'image/jpeg',0.85));
 pendingPhoto={blob,url:URL.createObjectURL(blob)};
-URL.revokeObjectURL(s.url);cropSt=null;closeSheet();
+URL.revokeObjectURL(s.url);cropSt=null;closeTopSheet();
 const w=$('#fp-photo-wrap');if(w){w.innerHTML=`<img src="${pendingPhoto.url}" alt=""><span class="ov">غيّر الصورة</span>`;}}
-function crCancel(){if(cropSt)URL.revokeObjectURL(cropSt.url);cropSt=null;closeSheet();}
+function crCancel(){if(cropSt)URL.revokeObjectURL(cropSt.url);cropSt=null;closeTopSheet();}
 function markPhotoRemove(){pendingPhoto='REMOVE';const w=$('#fp-photo-wrap');if(w){w.innerHTML=`${ic('box',28)}<span>اضغط عشان تضيف صورة</span>`;}const rb=$('#fp-photo-rm');if(rb)rb.remove();toast('الصورة هتتشال مع الحفظ');}
 /* ============ المتجر الإلكتروني (Supabase) ============ */
 const SB={
@@ -615,6 +619,7 @@ async req(path,opt){opt=opt||{};this.load();const anon=this.cfg.anon||SB_DEF.ano
 photoUrlFor(p){return (this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/storage/v1/object/public/product-photos/'+encodeURIComponent(p.id)+'.jpg?v='+(p.photoVer||1);},
 async uploadPhoto(id,blob){const r=await fetch((this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/storage/v1/object/product-photos/'+encodeURIComponent(id)+'.jpg',{method:'POST',headers:{'apikey':this.cfg.anon||SB_DEF.anon,'Authorization':'Bearer '+this.token,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
  if(!r.ok)throw new Error('photo-upload-failed:'+r.status);},
+async deletePhoto(id){try{await fetch((this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/storage/v1/object/product-photos/'+encodeURIComponent(id)+'.jpg',{method:'DELETE',headers:{'apikey':this.cfg.anon||SB_DEF.anon,'Authorization':'Bearer '+(this.token||this.cfg.anon||SB_DEF.anon)}});}catch(e){}},
 async pushProducts(){await this.ensureSession();
  const ups=JSON.parse(localStorage.getItem('mahal_photo_up')||'{}');
  for(const p of DB.products){if(p.photo&&p.photoVer&&ups[p.id]!==p.photoVer){const blob=await PHOTOS.get(p.id);if(blob){await this.uploadPhoto(p.id,blob);ups[p.id]=p.photoVer;}}}
@@ -1545,7 +1550,7 @@ ${fromPur?'':`<div class="field"><div class="lbl">الكمية الحالية</d
 ${fromPur?`<div class="alert" style="margin:0 0 13px"><span style="color:#9A6A14">${ic('box',18)}</span><div class="tx">الكمية اللي داخلة هتكتبها في التوريد نفسه بعد ما تضيف الصنف.</div></div>`:''}
 <button class="btn btn-p" style="width:100%" onclick="saveProduct('${pid||''}',${fromPur?'true':'false'})">${p?'حفظ التعديلات ✓':fromPur?'ضيف الصنف للتوريد ✓':'ضيف الصنف ✓'}</button>
 ${p&&!fromPur?`<button class="btn" style="background:var(--card);border:1px solid var(--line);width:100%;margin-top:8px" onclick="openMoveSheet('${p.id}')">📋 سجل حركة الصنف</button>`:''}
-${p?`<button class="btn-danger" onclick="closeSheet();confirmSheet('هتمسح الصنف ده من المخزون (الفواتير القديمة هتفضل زي ما هي). متأكد؟','امسح الصنف',()=>{DB.products=DB.products.filter(x=>x.id!=='${pid}');save();enqueue({type:'softdel',table:'products',rowId:'${pid}'});PHOTOS.del('${pid}').catch(()=>{});if(photoURLs['${pid}']){URL.revokeObjectURL(photoURLs['${pid}']);delete photoURLs['${pid}'];}render();toast('اتمسح');})">مسح الصنف</button>`:''}`);hydratePhotos();}
+${p?`<button class="btn-danger" onclick="closeSheet();confirmSheet('هتمسح الصنف ده من المخزون (الفواتير القديمة هتفضل زي ما هي). متأكد؟','امسح الصنف',()=>{DB.products=DB.products.filter(x=>x.id!=='${pid}');save();enqueue({type:'softdel',table:'products',rowId:'${pid}'});PHOTOS.del('${pid}').catch(()=>{});SB.deletePhoto('${pid}');if(photoURLs['${pid}']){URL.revokeObjectURL(photoURLs['${pid}']);delete photoURLs['${pid}'];}render();toast('اتمسح');})">مسح الصنف</button>`:''}`);hydratePhotos();}
 function openMoveSheet(pid){const p=prod(pid);if(!p)return;const mv=(DB.movements||[]).filter(m=>m.pid===pid).sort((a,b)=>new Date(b.date)-new Date(a.date));
 const sold=mv.filter(m=>m.kind==='sale'||m.kind==='order').reduce((s,m)=>s-m.qty,0);
 const inn=mv.filter(m=>m.kind==='in').reduce((s,m)=>s+m.qty,0);
@@ -1564,7 +1569,7 @@ const data={name,cat:$('#fp-cat').value,unit:$('#fp-unit').value.trim()||'قطع
 const ph=pendingPhoto;pendingPhoto=null;
 try{
 if(pid){const p=prod(pid);const md=st?Math.round((num(st.value)-p.stock)*100)/100:0;if(st&&md!==0){const mid=uid();logMove(pid,'edit',md,p.stock,num(st.value),'تعديل يدوي',mid);enqueue({type:'upsert',table:'movements',rowId:mid,prefer:'resolution=ignore-duplicates',row:ENT.movements.map(DB.movements[DB.movements.length-1])});}Object.assign(p,data);
- if(ph==='REMOVE'){await PHOTOS.del(pid).catch(()=>{});p.photo=0;p.photoVer=Date.now();if(photoURLs[pid]){URL.revokeObjectURL(photoURLs[pid]);delete photoURLs[pid];}}
+ if(ph==='REMOVE'){await PHOTOS.del(pid).catch(()=>{});p.photo=0;p.photoVer=Date.now();if(photoURLs[pid]){URL.revokeObjectURL(photoURLs[pid]);delete photoURLs[pid];}SB.deletePhoto(pid);}
  else if(ph&&ph.blob){await PHOTOS.set(pid,ph.blob);p.photo=1;p.photoVer=Date.now();photoObjUrl(pid,ph.blob);}
  save();enqueue({type:'upsert',table:'products',rowId:pid,row:ENT.products.map(p)});closeSheet();render();toast('اتحفظ ✓');return;}
 const np={id:uid(),...data};DB.products.push(np);if(np.stock>0){const mid0=uid();logMove(np.id,'open',np.stock,0,np.stock,'رصيد أول',mid0);enqueue({type:'upsert',table:'movements',rowId:mid0,prefer:'resolution=ignore-duplicates',row:ENT.movements.map(DB.movements[DB.movements.length-1])});}
