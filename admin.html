@@ -1,0 +1,283 @@
+<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>محلّي — لوحة المالك</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F2ECDD;--card:#FFF;--line:#E4D8BE;--ink:#1B1812;--muted:#7A6F5C;
+--green:#0B6B3D;--green2:#12A150;--green-soft:#D9EFE2;--amber:#E8960C;--amber-soft:#FCEED3;
+--red:#D63B2F;--red-soft:#FBE3E0;--blue:#1D5BB5;--blue-soft:#E3EDFA;--deep:#0A3D27;--purple:#6C3BD6;--purple-soft:#EEE7FB}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+.appbar{background:linear-gradient(135deg,var(--purple),#3D1F7A);padding:16px;display:flex;align-items:center;gap:10px;color:#fff;position:sticky;top:0;z-index:10}
+.appbar .t{font-size:18px;font-weight:800;flex:1}
+.appbar .t small{display:block;font-size:11.5px;font-weight:700;opacity:.85}
+.iconbtn{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.18);border:none;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:16px;cursor:pointer;font-family:inherit}
+.wrap{max-width:520px;margin:0 auto;padding:12px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:16px;padding:14px;margin-top:10px;box-shadow:0 2px 8px rgba(90,70,30,.06)}
+.trow{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;padding:6px 0}
+.k{color:var(--muted);font-weight:700}
+.btn{display:block;width:100%;text-align:center;border:none;border-radius:14px;padding:13px;font-weight:800;font-size:14.5px;margin-top:10px;cursor:pointer;font-family:inherit}
+.btn-p{background:linear-gradient(135deg,#8B5CF6,var(--purple));color:#fff;box-shadow:0 3px 10px rgba(108,59,214,.3)}
+.btn-o{background:var(--card);border:1.5px solid var(--line);color:var(--ink)}
+.btn-g{background:linear-gradient(135deg,var(--green2),var(--green));color:#fff}
+.btn-r{background:var(--red-soft);color:var(--red);border:1.5px solid #F0C4BF}
+.chip{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:99px}
+.chip-g{background:var(--green-soft);color:var(--green)}
+.chip-r{background:var(--red-soft);color:var(--red)}
+.chip-a{background:var(--amber-soft);color:var(--amber)}
+.shop{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1.5px solid var(--line);cursor:pointer}
+.shop:last-child{border-bottom:none}
+.shop .nm{flex:1}
+.shop .nm b{font-size:14.5px;display:block}
+.shop .nm span{font-size:11.5px;color:var(--muted);font-weight:700}
+.av{width:42px;height:42px;border-radius:13px;background:var(--purple-soft);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.row2{display:flex;gap:8px}
+.row2 .mini{flex:1;border-radius:14px;padding:10px;text-align:center;border:1.5px solid var(--line);background:var(--card)}
+.mini .v{font-size:18px;font-weight:900}
+.mini .l{font-size:11px;color:var(--muted);font-weight:700}
+.mini.g{background:var(--green-soft)}.mini.r{background:var(--red-soft)}.mini.a{background:var(--amber-soft)}.mini.p{background:var(--purple-soft)}
+.note{font-size:11.5px;color:var(--muted);font-weight:700;text-align:center;margin-top:10px;line-height:1.7}
+.seg{display:flex;background:var(--bg);border:1.5px solid var(--line);border-radius:12px;padding:3px;margin-top:8px}
+.seg div{flex:1;text-align:center;font-size:12.5px;font-weight:800;padding:8px;border-radius:9px;color:var(--muted);cursor:pointer}
+.seg .on{background:var(--purple);color:#fff}
+.field{margin-top:10px}
+.lbl{font-size:12px;font-weight:800;color:var(--muted);margin-bottom:4px}
+.inp{width:100%;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:11px;font-size:14px;font-weight:700;color:var(--ink);font-family:inherit;outline:none}
+.inp:focus{border-color:var(--purple)}
+.inp.ltr{direction:ltr;text-align:left}
+.prog{height:8px;background:var(--bg);border-radius:99px;overflow:hidden;margin-top:8px}
+.prog i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--green2),var(--green))}
+.prog i.warn{background:linear-gradient(90deg,var(--amber),#C77800)}
+.prog i.out{background:var(--red)}
+.days{font-size:12px;font-weight:800}
+.wa{background:#DCF3E5;border:1.5px solid #A8DDBF;border-radius:14px;padding:10px;font-size:12.5px;font-weight:700;line-height:1.9;margin-top:10px}
+.usr{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1.5px solid var(--line);font-size:13px;font-weight:700}
+.usr:last-child{border-bottom:none}
+.usr .r{margin-right:auto;font-size:11px;color:var(--muted);font-weight:800}
+.stop-ic{width:74px;height:74px;border-radius:24px;background:var(--red-soft);display:flex;align-items:center;justify-content:center;font-size:34px;margin:18px auto 10px}
+.overlay{position:fixed;inset:0;background:rgba(20,14,4,.5);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+.sheet{background:var(--bg);width:100%;max-width:520px;max-height:92vh;overflow-y:auto;border-radius:22px 22px 0 0;padding:16px 16px 28px}
+.sheet h3{font-size:16px;font-weight:900;text-align:center;margin:6px 0 4px}
+.toast{position:fixed;bottom:22px;right:50%;transform:translateX(50%);background:#1B1812;color:#fff;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:800;z-index:99;display:none}
+.spin{display:inline-block;width:16px;height:16px;border:2.5px solid var(--line);border-top-color:var(--purple);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+.login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.login .logo{width:72px;height:72px;border-radius:22px;background:linear-gradient(135deg,#8B5CF6,var(--purple));display:flex;align-items:center;justify-content:center;font-size:34px;box-shadow:0 6px 18px rgba(108,59,214,.35)}
+.cred{background:var(--bg);border:1.5px dashed var(--purple);border-radius:12px;padding:10px;font-size:13px;font-weight:700;direction:ltr;text-align:left;margin-top:10px;line-height:1.8;user-select:all}
+</style></head><body>
+
+<div id="view-login" class="login">
+<div class="logo">🛠️</div>
+<h2 style="margin-top:14px;font-weight:900">محلّي — لوحة المالك</h2>
+<p style="color:var(--muted);font-size:12.5px;font-weight:700;margin:4px 0 14px">الدخول لصاحب المنصة بس</p>
+<div class="card" style="width:100%;max-width:340px">
+<div class="field"><div class="lbl">الإيميل</div><input class="inp ltr" id="lg-email" autocomplete="username"></div>
+<div class="field"><div class="lbl">الباسورد</div><input class="inp ltr" id="lg-pass" type="password" autocomplete="current-password"></div>
+<button class="btn btn-p" onclick="doLogin()">دخول</button>
+<div class="note" id="lg-err" style="color:var(--red)"></div>
+</div></div>
+
+<div id="view-main" class="hidden">
+<div class="appbar"><div class="t" id="bar-title">محلّي — لوحة المالك<small>إدارة المحلات المشتركة</small></div>
+<button class="iconbtn" onclick="loadAll()" title="تحديث">↻</button>
+<button class="iconbtn" onclick="logout()" title="خروج">⏻</button></div>
+<div class="wrap" id="main-wrap"></div>
+</div>
+
+<div class="overlay hidden" id="ov"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPA={url:'https://ofqhrpkgxxbdrhuujgxt.supabase.co',anon:'sb_publishable_CH8nhDJQlV-5xsKYoCZRVg_mUoLsTQw'};
+let token=localStorage.getItem('mahal_admin_token')||'';
+let tenants=[];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('ar-EG',{day:'numeric',month:'long'}):'—';
+const daysLeft=t=>{if(!t.sub_end)return null;const t1=new Date(t.sub_end+'T00:00:00');const t0=new Date();t0.setHours(0,0,0,0);return Math.round((t1-t0)/86400000);};
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2600);}
+async function api(path,opts){opts=opts||{};opts.headers=Object.assign({'apikey':SUPA.anon,'Authorization':'Bearer '+(token||SUPA.anon),'Content-Type':'application/json'},opts.headers||{});
+ const r=await fetch(SUPA.url+'/rest/v1/'+path,opts);
+ if(r.status===401){logout();throw 'انتهت الجلسة';}
+ const t=await r.text();let j=null;try{j=t?JSON.parse(t):null;}catch(e){}
+ if(!r.ok)throw (j&&j.message)||('خطأ '+r.status);return j;}
+async function rpc(name,body){const r=await fetch(SUPA.url+'/rest/v1/rpc/'+name,{method:'POST',headers:{'apikey':SUPA.anon,'Authorization':'Bearer '+(token||SUPA.anon),'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+ const t=await r.text();let j=null;try{j=t?JSON.parse(t):null;}catch(e){}
+ if(!r.ok)throw (j&&j.message)||('خطأ '+r.status);return j;}
+
+async function doLogin(){
+ const email=$('#lg-email').value.trim(),pass=$('#lg-pass').value;
+ $('#lg-err').textContent='';
+ if(!email||!pass){$('#lg-err').textContent='اكتب الإيميل والباسورد';return;}
+ try{
+  const r=await fetch(SUPA.url+'/auth/v1/token?grant_type=password',{method:'POST',headers:{'apikey':SUPA.anon,'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+  const j=await r.json();
+  if(!r.ok){$('#lg-err').textContent='بيانات الدخول مش صح';return;}
+  token=j.access_token;localStorage.setItem('mahal_admin_token',token);
+  boot();
+ }catch(e){$('#lg-err').textContent='حصلت مشكلة في الاتصال';}
+}
+function logout(){token='';localStorage.removeItem('mahal_admin_token');$('#view-main').classList.add('hidden');$('#view-login').classList.remove('hidden');}
+
+async function boot(){
+ $('#view-login').classList.add('hidden');$('#view-main').classList.remove('hidden');
+ try{
+  const me=await api('shop_users?select=name,owner&limit=1');
+  const admin=await api('platform_admins?select=user_id&limit=1');
+  if(!admin||!admin.length){$('#main-wrap').innerHTML='<div class="card" style="text-align:center;margin-top:30px"><div class="stop-ic">🔒</div><b>الحساب ده مش أدمن المنصة</b><div class="note">سجّل بحساب مالك المنصة</div></div>';return;}
+  loadAll();
+ }catch(e){$('#main-wrap').innerHTML='<div class="note">'+esc(String(e))+'</div>';}
+}
+
+async function loadAll(){
+ $('#main-wrap').innerHTML='<div class="note"><span class="spin"></span> بيحمّل…</div>';
+ try{
+  tenants=await rpc('admin_list_tenants');
+  renderHome();
+ }catch(e){$('#main-wrap').innerHTML='<div class="note" style="color:var(--red)">'+esc(String(e))+'</div>';}
+}
+
+function statusOf(t){const d=daysLeft(t);
+ if(t.status!=='active')return{chip:'<span class="chip chip-r">موقوف</span>',txt:d!==null?('خلص من '+Math.abs(d)+' يوم'):'موقوف',cls:'var(--red)',kind:'out'};
+ if(d===null)return{chip:'<span class="chip chip-g">فعّال</span>',txt:'مفتوح',cls:'var(--muted)',kind:'ok'};
+ if(d<0)return{chip:'<span class="chip chip-r">منتهي</span>',txt:'خلص من '+Math.abs(d)+' يوم',cls:'var(--red)',kind:'out'};
+ if(d<=7)return{chip:'<span class="chip chip-a">قرب يخلص</span>',txt:'باقي '+d+' يوم',cls:'var(--amber)',kind:'warn'};
+ return{chip:'<span class="chip chip-g">فعّال</span>',txt:'باقي '+d+' يوم',cls:'var(--green)',kind:'ok'};}
+
+function renderHome(){
+ const act=tenants.filter(t=>statusOf(t).kind!=='out').length;
+ const warn=tenants.filter(t=>statusOf(t).kind==='warn').length;
+ $('#main-wrap').innerHTML=`
+ <div class="row2" style="margin-top:2px">
+ <div class="mini p"><div class="v">${tenants.length}</div><div class="l">محل مشترك</div></div>
+ <div class="mini g"><div class="v">${act}</div><div class="l">اشتراك فعّال</div></div>
+ <div class="mini a"><div class="v">${warn}</div><div class="l">قرب يخلص</div></div></div>
+ <div class="card">${tenants.map((t,i)=>{const s=statusOf(t);return `
+  <div class="shop" onclick="renderDetail(${i})"><div class="av">🏪</div>
+  <div class="nm"><b>${esc(t.name)}</b><span>${esc(t.owner_name||'—')}${t.phone?' · '+esc(t.phone):''}</span></div>
+  <div style="text-align:left">${s.chip}<div class="days" style="color:${s.cls}">${s.txt}</div></div></div>`;}).join('')||'<div class="note">لسه مفيش محلات</div>'}</div>
+ <button class="btn btn-p" onclick="renderAdd()">＋ أضف محل جديد</button>
+ <div class="note">دوس على أي محل عشان تشوف تفاصيله، تجدده، أو توقفه</div>`;
+}
+
+function renderDetail(i){
+ const t=tenants[i];const s=statusOf(t);const d=daysLeft(t);
+ const total=t.sub_start&&t.sub_end?Math.max(1,Math.round((new Date(t.sub_end)-new Date(t.sub_start))/86400000)):0;
+ const pct=d===null?100:Math.max(0,Math.min(100,Math.round(d/total*100)));
+ $('#main-wrap').innerHTML=`
+ <div class="row2" style="margin-top:2px">
+ <div class="mini p"><div class="v">${t.products}</div><div class="l">صنف</div></div>
+ <div class="mini g"><div class="v">${t.invoices_month}</div><div class="l">فاتورة الشهر ده</div></div>
+ <div class="mini"><div class="v">${t.users}</div><div class="l">مستخدم</div></div></div>
+ <div class="card">
+ <div style="display:flex;align-items:center;gap:10px"><div class="av">🏪</div>
+ <div style="flex:1"><b style="font-size:16px">${esc(t.name)}</b><div style="font-size:12px;color:var(--muted);font-weight:700">${esc(t.owner_name||'—')}${t.phone?' · '+esc(t.phone):''}</div></div>${s.chip}</div>
+ <div class="trow"><span class="k">الاشتراك</span><b>${t.sub_start?fmtD(t.sub_start):'—'} ← ${t.sub_end?fmtD(t.sub_end):'مفتوح'}</b></div>
+ <div class="trow"><span class="k">المتبقي</span><b class="days" style="color:${s.cls}">${s.txt}</b></div>
+ ${d!==null?`<div class="prog"><i class="${s.kind==='ok'?'':(s.kind==='warn'?'warn':'out')}" style="width:${pct}%"></i></div>`:''}
+ <button class="btn btn-g" onclick="renderRenew(${i})">↻ جدد الاشتراك</button>
+ ${t.status==='active'
+  ?`<button class="btn btn-r" onclick="toggleTenant(${i},'suspended')">⏻ وقف المحل مؤقتًا</button>`
+  :`<button class="btn btn-g" onclick="toggleTenant(${i},'active')">▶ شغّل المحل</button>`}
+ </div>
+ <div class="card"><div class="lbl" style="margin-bottom:2px">المستخدمين</div><div id="users-box"><span class="spin"></span></div></div>
+ ${t.last_activity?`<div class="note">آخر نشاط: ${new Date(t.last_activity).toLocaleString('ar-EG',{day:'numeric',month:'long',hour:'numeric',minute:'2-digit'})}</div>`:''}
+ <button class="btn btn-o" onclick="renderHome()">‹ رجوع للقائمة</button>`;
+ api('shop_users?select=name,owner,active,perms&tenant_id=eq.'+t.id).then(us=>{
+  $('#users-box').innerHTML=us.map(u=>`<div class="usr">👤 ${esc(u.name)}<span class="r">${u.owner?'مالك · كل الصلاحيات':'موظف'}${u.active?'':' · موقوف'}</span></div>`).join('')||'<div class="note">مفيش مستخدمين</div>';
+ }).catch(()=>{$('#users-box').innerHTML='<div class="note">تعذر التحميل</div>';});
+}
+
+let addMonths=3;
+function renderAdd(){
+ addMonths=3;
+ $('#main-wrap').innerHTML=`
+ <div class="card">
+ <div class="field"><div class="lbl">اسم المحل</div><input class="inp" id="ad-name" placeholder="سوبر ماركت الأمانة"></div>
+ <div class="field"><div class="lbl">اسم صاحب المحل</div><input class="inp" id="ad-owner" placeholder="الحاج أشرف"></div>
+ <div class="field"><div class="lbl">رقم التليفون</div><input class="inp ltr" id="ad-phone" inputmode="tel" placeholder="01001234567"></div>
+ <div class="field"><div class="lbl">الإيميل (بيدخل بيه)</div><input class="inp ltr" id="ad-email" placeholder="ashraf@shop.com"></div>
+ <div class="field"><div class="lbl">الباسورد</div>
+ <div style="display:flex;gap:8px"><input class="inp ltr" style="flex:1" id="ad-pass"><button class="btn btn-o" style="margin:0;padding:11px 14px;font-size:12.5px;width:auto" onclick="genPass()">توليد 🎲</button></div></div>
+ <div class="field"><div class="lbl">مدة الاشتراك</div>
+ <div class="seg" id="ad-seg"><div data-m="1">شهر</div><div data-m="3" class="on">٣ شهور</div><div data-m="6">٦ شهور</div><div data-m="12">سنة</div></div></div>
+ <button class="btn btn-p" id="ad-btn" onclick="createShop()">أنشئ المحل ✓</button>
+ <button class="btn btn-o" onclick="renderHome()">إلغاء</button></div>
+ <div class="wa">بعد الإنشاء ابعت لصاحب المحل: الإيميل + الباسورد + لينك التطبيق — وأول ما يدخل يلاقي محله فاضي جاهز يضيف أصنافه.</div>`;
+ $('#ad-seg').querySelectorAll('div').forEach(d=>d.onclick=()=>{$('#ad-seg').querySelectorAll('div').forEach(x=>x.classList.remove('on'));d.classList.add('on');addMonths=+d.dataset.m;});
+ genPass();
+}
+function genPass(){
+ const w1=['Baraka','Nour','Amal','Safaa','Rizk','Hoda','Amana','Fath'][Math.floor(Math.random()*8)];
+ $('#ad-pass').value=w1+'@'+new Date().getFullYear()+Math.floor(Math.random()*90+10);
+}
+async function createShop(){
+ const name=$('#ad-name').value.trim(),owner=$('#ad-owner').value.trim(),phone=$('#ad-phone').value.trim(),
+       email=$('#ad-email').value.trim().toLowerCase(),pass=$('#ad-pass').value;
+ if(!name||!email||!pass){toast('اسم المحل والإيميل والباسورد مطلوبين');return;}
+ if(pass.length<6){toast('الباسورد ٦ حروف على الأقل');return;}
+ const btn=$('#ad-btn');btn.disabled=true;btn.innerHTML='<span class="spin"></span> بيتم الإنشاء…';
+ try{
+  // ١) حساب الدخول
+  const sr=await fetch(SUPA.url+'/auth/v1/signup',{method:'POST',headers:{'apikey':SUPA.anon,'Content-Type':'application/json'},body:JSON.stringify({email,password:pass})});
+  const sj=await sr.json();
+  const uid=sj&&(sj.user?sj.user.id:sj.id);
+  if(!sr.ok||!uid)throw (sj&&(sj.msg||sj.message||sj.error_description))||'تعذر إنشاء حساب الدخول (الإيميل مستخدم؟)';
+  // ٢) المحل
+  const start=new Date();const end=new Date();end.setMonth(end.getMonth()+addMonths);
+  const t=await api('tenants',{method:'POST',headers:{'Prefer':'return=representation'},
+   body:JSON.stringify({name,owner_name:owner,phone,status:'active',
+    sub_start:start.toISOString().slice(0,10),sub_end:end.toISOString().slice(0,10)})});
+  const tid=t[0].id;
+  // ٣) المستخدم المالك
+  await api('shop_users',{method:'POST',headers:{'Prefer':'return=minimal'},
+   body:JSON.stringify({tenant_id:tid,auth_id:uid,name:owner||name,owner:true,active:true,
+    perms:{orders:1,invoice:1,products:1,customers:1,suppliers:1,settings:1,del:1,stats:1}})});
+  $('#main-wrap').innerHTML=`
+  <div class="card" style="text-align:center;margin-top:16px">
+  <div style="font-size:44px">✅</div>
+  <b style="font-size:16px">محل "${esc(name)}" اتعمل!</b>
+  <div class="cred">اللينك: yafozkaraso174-ux.github.io/mahal<br>الإيميل: ${esc(email)}<br>الباسورد: ${esc(pass)}<br>الاشتراك لحد: ${fmtD(end.toISOString().slice(0,10))}</div>
+  <button class="btn btn-g" onclick="copyCred('${esc(email)}','${esc(pass)}')">📋 انسخ بيانات الدخول</button>
+  <button class="btn btn-p" onclick="loadAll()">رجوع للقائمة</button></div>`;
+ }catch(e){toast(String(e).slice(0,120));btn.disabled=false;btn.textContent='أنشئ المحل ✓';}
+}
+function copyCred(email,pass){
+ const txt='تطبيق محلّي — بيانات دخول محلك:\nاللينك: https://yafozkaraso174-ux.github.io/mahal\nالإيميل: '+email+'\nالباسورد: '+pass;
+ navigator.clipboard.writeText(txt).then(()=>toast('اتنسخت ✅'),()=>toast('انسخها يدويًا'));
+}
+
+let renMonths=3;
+function renderRenew(i){
+ const t=tenants[i];
+ renMonths=3;
+ const base=t.sub_end&&new Date(t.sub_end)>new Date()?new Date(t.sub_end):new Date();
+ const calc=()=>{const e=new Date(base);e.setMonth(e.getMonth()+renMonths);return e;};
+ $('#sheet').innerHTML=`
+ <h3>تجديد — ${esc(t.name)}</h3>
+ <div class="note">المدة الجديدة بتضاف على ${t.sub_end&&new Date(t.sub_end)>new Date()?'المدة الباقية':'النهارده'}</div>
+ <div class="card"><div class="lbl">المدة الجديدة</div>
+ <div class="seg" id="rn-seg"><div data-m="1">شهر</div><div data-m="3" class="on">٣ شهور</div><div data-m="6">٦ شهور</div><div data-m="12">سنة</div></div>
+ <div class="trow" style="margin-top:10px"><span class="k">الاشتراك الحالي ينتهي</span><b>${t.sub_end?fmtD(t.sub_end):'—'}</b></div>
+ <div class="trow"><span class="k">بعد التجديد ينتهي</span><b style="color:var(--purple)" id="rn-end">${fmtD(calc().toISOString().slice(0,10))}</b></div>
+ <button class="btn btn-p" onclick="doRenew('${t.id}')">أكّد التجديد ✓</button>
+ <button class="btn btn-o" onclick="closeSheet()">إلغاء</button></div>`;
+ $('#rn-seg').querySelectorAll('div').forEach(d=>d.onclick=()=>{$('#rn-seg').querySelectorAll('div').forEach(x=>x.classList.remove('on'));d.classList.add('on');renMonths=+d.dataset.m;$('#rn-end').textContent=fmtD(calc().toISOString().slice(0,10));});
+ $('#ov').classList.remove('hidden');
+}
+async function doRenew(tid){
+ try{const nd=await rpc('admin_extend_subscription',{p_tenant:tid,p_months:renMonths});
+  closeSheet();toast('اتجدد لحد '+fmtD(nd));loadAll();
+ }catch(e){toast(String(e).slice(0,100));}
+}
+async function toggleTenant(i,st){
+ const t=tenants[i];
+ try{await rpc('admin_set_tenant_status',{p_tenant:t.id,p_status:st});
+  toast(st==='active'?'المحل اتشغّل ✅':'المحل اتوقف ⏸');loadAll();
+ }catch(e){toast(String(e).slice(0,100));}
+}
+function closeSheet(){$('#ov').classList.add('hidden');}
+$('#ov').addEventListener('click',e=>{if(e.target.id==='ov')closeSheet();});
+if(token)boot();
+</script></body></html>
