@@ -452,8 +452,9 @@ function outboxSet(o){localStorage.setItem(OUTBOX_KEY,JSON.stringify(o));}
 function outboxPending(){return outboxGet().length;}
 function enqueue(op){const o=outboxGet();op.actorAuthId=curUser?.authId||null;op.qid=uid();op.at=new Date().toISOString();o.push(op);outboxSet(o);flushOutbox().catch(()=>{});}
 function outboxHas(table,id){return outboxGet().some(x=>x.table===table&&x.rowId===id&&!x.failed);}
-let flushBusy=false;
-async function flushOutbox(){if(flushBusy||!navigator.onLine||!SB.ready()||!authGet()||!curUser||curUser.tenantBlocked)return;
+let flushBusy=false,flushPromise=null;
+function flushOutbox(){if(flushPromise)return flushPromise;flushPromise=runOutboxFlush().finally(()=>{flushPromise=null;});return flushPromise;}
+async function runOutboxFlush(){if(flushBusy||!navigator.onLine||!SB.ready()||!authGet()||!curUser||curUser.tenantBlocked)return;
  flushBusy=true;
  try{await SB.ensureSession();let o=outboxGet();
   for(const op of o){if(!curUser||curUser.tenantBlocked)break;if(op.failed)continue;if(op.actorAuthId&&op.actorAuthId!==curUser.authId){toast('فيه عمليات لحساب تاني. ادخل بالحساب اللي سجّلها عشان تفضل باسمه.');break;}
@@ -754,9 +755,20 @@ async uploadPhoto(id,blob){const r=await fetch((this.cfg.url||SB_DEF.url).replac
  if(!r.ok)throw new Error('photo-upload-failed:'+r.status);},
 async deletePhoto(id){try{await fetch((this.cfg.url||SB_DEF.url).replace(/\/$/,'')+'/storage/v1/object/product-photos/'+encodeURIComponent(id)+'.jpg',{method:'DELETE',headers:{'apikey':this.cfg.anon||SB_DEF.anon,'Authorization':'Bearer '+(this.token||this.cfg.anon||SB_DEF.anon)}});}catch(e){}},
 async pushProducts(){await this.ensureSession();
+ const principal=authGet()?.uid,scope=tenantScope;
+ const check=()=>{if(!principal||principal!==authGet()?.uid||scope!==tenantScope||!curUser||curUser.tenantBlocked)throw new Error('account changed');};
+ check();if(!navigator.onLine)throw new Error('sync-incomplete');
+ // Await the same flush even when an automatic sync is already running.
+ await flushOutbox();check();if(outboxPending())throw new Error('sync-incomplete');
  const ups=JSON.parse(localStorage.getItem(tenantKey('mahal_photo_up'))||'{}');
- for(const p of DB.products){if(p.photo&&p.photoVer&&ups[p.id]!==p.photoVer){const blob=await PHOTOS.get(p.id);if(blob){await this.uploadPhoto(p.id,blob);ups[p.id]=p.photoVer;}}}
- localStorage.setItem(tenantKey('mahal_photo_up'),JSON.stringify(ups));
+ for(const p of DB.products){if(p.photo&&p.photoVer&&ups[p.id]!==p.photoVer){
+  const blob=await PHOTOS.get(p.id);check();if(!blob)throw new Error('photo-unavailable');
+  // A leftover local image must not create/overwrite a stale stock row.
+  const rows=await this.req('products?id=eq.'+encodeURIComponent(p.id)+'&select=id,deleted');check();
+  if(!rows?.some(r=>r.id===p.id&&!r.deleted))throw new Error('sync-incomplete');
+  await this.uploadPhoto(p.id,blob);check();ups[p.id]=p.photoVer;
+  localStorage.setItem(tenantKey('mahal_photo_up'),JSON.stringify(ups));
+ }}
  if(typeof can==='function'&&can('settings')){
  const info=[{id:1,shop_name:DB.settings.shopName,owner_name:DB.settings.ownerName||'',phone:DB.settings.phone||'',payment:DB.settings.pay||{cash:{on:true}},delivery_fee:DB.settings.deliveryFee||0,zones:DB.settings.zones||[],delivery_on:DB.settings.deliveryOn!==false,updated_at:new Date().toISOString()}];
  try{await this.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},body:JSON.stringify(info)});}
@@ -862,7 +874,8 @@ async function restoreCloudBackup(){if(!SB.ready()){toast('المتجر مش م�
 window.addEventListener('pagehide',()=>{if(backupTimer){clearTimeout(backupTimer);backupTimer=null;pushCloudBackup();}});
 async function syncShopNow(){if(!SB.ready()){toast('حط بيانات المتجر الأول من الإعدادات');return;}
 toast('بنزّل الأصناف على المتجر…');
-try{const n=await SB.pushProducts();toast('اتنزّل '+n.toLocaleString(AR)+' صنف على المتجر ✓');}catch(e){toast(e.message==='no-auth'?'سجّل دخولك الأول':'في مشكلة في الاتصال — جرب تاني');}}
+const progressToast=document.body.lastElementChild;
+try{const n=await SB.pushProducts();progressToast?.remove();toast('اتنزّل '+n.toLocaleString(AR)+' صنف على المتجر ✓');}catch(e){progressToast?.remove();toast(e.message==='no-auth'?'سجّل دخولك الأول':'المزامنة مخلصتش. راجع الاتصال والصور وجرّب تاني.');}}
 async function refreshOrders(quiet){if(!SB.ready()){shopOrders=null;return;}
 if(!can('orders')){shopOrders=[];shopOrdersErr=false;return;}
 try{shopOrders=await SB.fetchOrders();shopOrdersErr=false;}catch(e){shopOrdersErr=true;}
