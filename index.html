@@ -4,8 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0B6B3D">
-<title>محلي — إدارة المحل</title>
+<title>دكانك — إدارة المحل</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="دكانك">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -397,7 +400,7 @@ DB.users.forEach(u=>{if(!u.owner&&u.perms&&u.perms.stats==null)u.perms.stats=1;}
 let SYNC_KEY='mahal_sync_v1',DIRTY_KEY='mahal_db_changed_at';
 let backupTimer=null,applyingRemote=false,syncBusy=false,lastSyncTick=0;
 function markDirty(){if(applyingRemote)return;localStorage.setItem(DIRTY_KEY,new Date().toISOString());}
-function save(){localStorage.setItem(KEY,JSON.stringify(DB));markDirty();try{scheduleCloudBackup();}catch(e){}}
+function save(){localStorage.setItem(KEY,JSON.stringify(DB));markDirty();try{scheduleCloudBackup();}catch(e){}try{scheduleDriveBackup();}catch(e){}}
 function logMove(pid,kind,qty,before,after,ref,mid){DB.movements.push({id:mid||uid(),pid,kind,qty,before,after,ref:ref||'',date:new Date().toISOString()});}
 /* ============ مزامنة الجداول: شغل كل الأجهزة بيتشارك لايف ============ */
 let OUTBOX_KEY='mahal_outbox_v1',SYNC2_KEY='mahal_sync2_v1';
@@ -535,11 +538,11 @@ let curUser=null;
 function savedUserGet(){try{const cu=JSON.parse(sessionStorage.getItem('mahal_cur')||localStorage.getItem('mahal_cur_ls')||'null');const a=authGet();return cu&&cu.authId&&a&&a.uid===cu.authId?cu:null;}catch(e){return null;}}
 try{const cu=savedUserGet();if(cu)curUser=cu;else sessionStorage.removeItem('mahal_cur');}catch(e){}
 function can(p){return !!(curUser&&(curUser.owner||(curUser.perms&&curUser.perms[p])));}
-const APP_VER='2026-11-23r43';
+const APP_VER='2026-11-24r50';
 const PERMS=[['stats','إحصائيات الرئيسية'],['invoice','فواتير'],['products','الأصناف'],['customers','الزباين'],['suppliers','الموردين'],['orders','طلبات المتجر'],['settings','الإعدادات'],['del','مسح بيانات']];
 function permSummary(u){if(u.owner)return 'كل الصلاحيات';const l=PERMS.filter(([k])=>u.perms&&u.perms[k]).map(x=>x[1]);return l.length?l.join(' · '):'من غير صلاحيات';}
 function vLogin(){SB.load();const em=(SB.cfg&&SB.cfg.email)||'';
-return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>محلي — إدارة المحلات</h2><p>سجّل دخولك لفتح محلك بالإيميل والباسورد</p>
+return `<div class="lockwrap"><div class="lockcard"><div class="lk">${ic('lock',26)}</div><h2>دكانك — إدارة المحلات</h2><p>سجّل دخولك لفتح محلك بالإيميل والباسورد</p>
 <div class="field" style="text-align:right"><div class="lbl">الإيميل</div><input id="li-email" type="email" value="${esc(em)}" autocomplete="username" style="direction:ltr;text-align:left" placeholder="name@email.com"></div>
 <div class="field" style="text-align:right"><div class="lbl">الباسورد</div><input id="li-pass" type="password" autocomplete="current-password" style="direction:ltr;text-align:left" placeholder="••••••" onkeydown="if(event.key==='Enter')doEmailLogin()"></div>
 <button class="btn btn-p" style="width:100%;margin-top:6px" onclick="doEmailLogin()">دخول</button></div></div>`;}
@@ -1772,7 +1775,7 @@ return `<div class="set-row store-link-card" style="cursor:default">${ic('store'
 <div class="field"><div class="lbl">المفتاح العمومي (anon public key)</div><input id="sb-anon" value="${esc(c.anon||SB_DEF.anon)}" type="password" autocomplete="off" style="direction:ltr;text-align:left"></div>
 <button class="btn btn-p" style="width:100%" onclick="saveShopCfg()">حفظ ✓</button>
 </template>`;}
-function zonesHTML(){return DB.settings.zones.map((z,i)=>`<div style="display:flex;gap:7px;margin-bottom:7px"><input value="${esc(z.name)}" placeholder="اسم المنطقة (مثال: داخل شربين)" oninput="DB.settings.zones[${i}].name=this.value;save()" style="flex:1.6;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit"><input type="number" min="0" step="any" value="${z.fee}" placeholder="السعر" oninput="DB.settings.zones[${i}].fee=Math.max(0,+this.value||0);save()" style="flex:0.7;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 8px;font-size:13px;font-family:inherit;direction:ltr;text-align:center"><button onclick="DB.settings.zones.splice(${i},1);save();render()" style="color:var(--red);padding:0 8px">${ic('trash',17)}</button></div>`).join('')
+function zonesHTML(){return DB.settings.zones.map((z,i)=>`<div style="display:flex;gap:7px;margin-bottom:7px"><input value="${esc(z.name)}" placeholder="اسم المنطقة (مثال: داخل شربين)" oninput="DB.settings.zones[${i}].name=this.value;save()" style="flex:1.6;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit"><input type="number" min="0" step="any" value="${z.fee}" placeholder="السعر" oninput="DB.settings.zones[${i}].fee=Math.max(0,+this.value||0);save()" style="flex:0.7;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 8px;font-size:13px;font-family:inherit;direction:ltr;text-align:center"><button onclick="DB.settings.zones.splice(${i},1);save();render()" style="color:var(--red);padding:0 8px">${ic('trash',17)}</button></div>`).join('')
 +`<button class="btn" style="width:100%;background:var(--card);border:1px dashed var(--line);color:var(--green);font-weight:800" onclick="DB.settings.zones.push({name:'',fee:0});save();render()">＋ ضيف منطقة</button>`
 +`<div style="font-size:11.5px;color:var(--muted);font-weight:600;margin:6px 2px 0">بعد أي تعديل دوس «نزّل الأصناف على المتجر» عشان يوصل للزباين</div>`;}
 function paymentDefaults(p){p=p&&typeof p==='object'?p:{};
@@ -1795,7 +1798,7 @@ function vSettings(){const full=can('settings');return `<div class="appbar"><div
 ${full?`<div class="field"><div class="lbl">اسم المحل</div><input id="st-shop" value="${esc(DB.settings.shopName)}"></div>
 <div class="field"><div class="lbl">اسمك (للتحية في الرئيسية)</div><input id="st-owner" value="${esc(DB.settings.ownerName||'')}" placeholder="الحاج محمود"></div>
 <div class="field"><div class="lbl">موبايل المحل (واتساب — بيظهر للزباين في المتجر)</div><input id="st-phone" value="${esc(DB.settings.phone||'')}" placeholder="01xxxxxxxxx" inputmode="tel" style="direction:ltr;text-align:right"></div>
-<button class="btn btn-p" style="width:100%" onclick="DB.settings.shopName=$('#st-shop').value.trim()||'محلي';DB.settings.ownerName=$('#st-owner').value.trim();DB.settings.phone=$('#st-phone').value.trim();save();render();toast('اتحفظ ✓')">حفظ ✓</button>
+<button class="btn btn-p" style="width:100%" onclick="DB.settings.shopName=$('#st-shop').value.trim()||'دكانك';DB.settings.ownerName=$('#st-owner').value.trim();DB.settings.phone=$('#st-phone').value.trim();save();render();toast('اتحفظ ✓')">حفظ ✓</button>
 ${myShopLinksHTML()}
 <div class="sec-title">المتجر الإلكتروني</div>
 ${shopSettingsHTML()}
@@ -1808,6 +1811,7 @@ ${zonesHTML()}
 ${paySettingsHTML()}
 <div class="sec-title">النسخ الاحتياطي</div>
 <div class="set-row" style="cursor:default">${ic('lock')}<span>نسخ تلقائي على السحابة<span class="s" style="display:block" id="bk-status">${backupStatusText()}</span></span></div>
+${curUser&&curUser.owner?driveRowHTML():''}
 ${syncDiagHTML()}
 <button class="set-row" onclick="pushCloudBackup().then(()=>{toast(localStorage.getItem(tenantKey('mahal_last_backup'))?'النسخة اترفعت ✓':'مفيش اتصال — هتترفع لوحدها أول ما النت يشتغل');})">${ic('upload')}<span>ارفع نسخة دلوقتي<span class="s" style="display:block">بتتخزن في مشروع Supabase بتاعك (جدول backups) — فين؟ افتح supabase.com ← مشروعك ← Table Editor ← backups</span></span></button>
 <button class="set-row" onclick="restoreCloudBackup()">${ic('down')}<span>رجّع آخر نسخة من السحابة<span class="s" style="display:block">لو الجهاز اتضاع أو البيانات اتمسحت</span></span></button>
@@ -1825,7 +1829,7 @@ ${syncDiagHTML()}
 ${curUser.owner?`<button class="set-row" onclick="go('#/audit');auditLoad()"><span>السجل الرقابي<span class="s" style="display:block">مين نفّذ إيه · استعادة المحذوف</span></span></button><button class="set-row" onclick="go('#/users')">${ic('users')}<span>إدارة المستخدمين<span class="s" style="display:block">ضيف حسابات للعاملين معاك، فعّل/وقّف، وحدد صلاحيات كل واحد</span></span></button>`:''}
 <button class="set-row" onclick="openMyPassSheet()">${ic('lock')}<span>غيّر الباسورد بتاعك</span></button>
 <button class="set-row" style="color:var(--red)" onclick="logout()">${ic('x')}<span>تسجيل خروج</span></button>
-<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">محلي — إدارة المحل · إصدار ${APP_VER} · متزامن على كل أجهزتك عن طريق السحابة</div>
+<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:18px;font-weight:600">دكانك — إدارة المحل · إصدار ${APP_VER} · متزامن على كل أجهزتك عن طريق السحابة</div>
 </div>`+navbar('home');}
 function exportData(){const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
 const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='نسخة-احتياطية-'+todayStr()+'.json';a.click();toast('النسخة نزلت ✓');}
@@ -1967,6 +1971,7 @@ if(curUser.tenantBlocked){app.innerHTML='<div class="lockwrap"><div class="lockc
 let html;
 cmEnsure();
 if(h==='#/audit'){html=auditHTML();}
+else if(h==='#/audit-archive'){html=archHTML();}
 else if((html=cmRoute(h))!==null){}
 else if(h==='#/'||h==='#'){closeSheet();html=vDash();}
 else if(h==='#/products'){html=can('products')?vProducts():vNoPerm();}
@@ -2351,6 +2356,234 @@ function cmUnitPriceMode(){const area=$('#un-pricemode').value==='area';$('#un-p
 
 function cmOfferChanged(pid,snapshot){if(!snapshot)return false;const q=cmQuote(DB.offers||[],pid,snapshot.original);return q.conflict||!q.offer||q.offer.id!==snapshot.id||q.price!==snapshot.price||q.offer.name!==snapshot.name;}
 function cmMobileRefresh(){mobCart.forEach(x=>delete x.cmQuote);mobCheckoutRender();mobBar();}
+
+/* @drive-sync */
+/* ---- مزامنة Drive: نسخة احتياطية على درايف صاحب المحل نفسه (صلاحية drive.file فقط) ---- */
+const DRIVE_CLIENT_ID=(window.MAHAL_DRIVE_CLIENT_ID||'938858634401-so1rk2q3roeookpj6dl5ls2h6sstnf86.apps.googleusercontent.com');
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+let driveTok=null,driveTokExp=0,driveTimer=null,driveBusy=false,driveTC=null;
+function dvGet(){try{return JSON.parse(localStorage.getItem(tenantKey('mahal_drive'))||'{}');}catch(e){return {};}}
+function dvSet(s){localStorage.setItem(tenantKey('mahal_drive'),JSON.stringify(s));}
+function dvLive(){return !!driveTok&&Date.now()<driveTokExp-30000;}
+function dvLoadGIS(){return new Promise((res,rej)=>{if(window.google&&google.accounts&&google.accounts.oauth2)return res();
+ const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';s.onload=()=>res();s.onerror=()=>rej(new Error('مش قادر أوصل لجوجل — اتأكد من النت'));document.head.appendChild(s);});}
+function driveStatusText(){const s=dvGet();
+ if(!DRIVE_CLIENT_ID)return 'مزامنة Drive لسه ماتفعّلتش على الخدمة';
+ if(!s.connected)return 'مش متوصل. دوس "مزامنة Drive" وسجل بإيميلك';
+ if(s.err)return 'آخر محاولة فشلت: '+s.err;
+ if(!dvLive())return (s.email?('متوصل ('+s.email+') — '):'')+'اضغط "مزامنة Drive" عشان تكمل'+(s.last?(' · آخر نسخة: '+relDate(s.last)):'');
+ return (s.email?('متوصل ('+s.email+') — '):'متوصل — ')+(s.last?('آخر نسخة: '+relDate(s.last)):'أول نسخة بعد أول تعديل');}
+function driveRefreshUI(){const el=document.getElementById('dv-status');if(el)el.textContent=driveStatusText();}
+async function dvApi(url,opt){const r=await fetch(url,Object.assign({},opt,{headers:Object.assign({Authorization:'Bearer '+driveTok},(opt&&opt.headers)||{})}));
+ if(r.status===401){driveTok=null;throw new Error('انتهت الجلسة، دوس مزامنة Drive تاني');}
+ if(!r.ok){let m='';try{m=(await r.json()).error.message;}catch(e){}throw new Error('Drive '+r.status+(m?': '+m:''));}return r.json();}
+async function dvFindOrMake(name,parent,mime){const q="name='"+name.replace(/'/g,"\\'")+"' and trashed=false"+(parent?" and '"+parent+"' in parents":"")+(mime?" and mimeType='"+mime+"'":"");
+ const l=await dvApi('https://www.googleapis.com/drive/v3/files?fields=files(id)&q='+encodeURIComponent(q));if(l.files&&l.files[0])return l.files[0].id;return null;}
+const DV_FOLDER='دكانك - نسخ احتياطية',DV_FOLDER_OLD='محلي - نسخ احتياطية',DV_FMIME='application/vnd.google-apps.folder';
+async function dvFindFolder(){const a=await dvFindOrMake(DV_FOLDER,null,DV_FMIME);if(a)return {id:a,old:false};const b=await dvFindOrMake(DV_FOLDER_OLD,null,DV_FMIME);return b?{id:b,old:true}:null;}
+async function dvRenameFolder(id){try{await dvApi('https://www.googleapis.com/drive/v3/files/'+id+'?fields=id',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DV_FOLDER})});return true;}catch(e){if(/انتهت/.test(e.message))throw e;return false;}}
+async function dvEnsureFolder(s){let f=s.folder;
+ if(f){if(!s.renamed){if(await dvRenameFolder(f))s.renamed=1;}return f;}
+ const r=await dvFindFolder();
+ if(r){f=r.id;if(r.old){if(await dvRenameFolder(f))s.renamed=1;}else s.renamed=1;return f;}
+ const c=await dvApi('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DV_FOLDER,mimeType:DV_FMIME})});s.renamed=1;return c.id;}
+async function dvReadFolder(s){if(s.folder)return s.folder;const r=await dvFindFolder();return r?r.id:null;}
+async function dvUpload(name,parent,body,existingId){const meta={name};if(!existingId&&parent)meta.parents=[parent];
+ const b='mahalb'+Date.now();const data='--'+b+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+b+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+body+'\r\n--'+b+'--';
+ const u=existingId?('https://www.googleapis.com/upload/drive/v3/files/'+existingId+'?uploadType=multipart&fields=id'):'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id';
+ return dvApi(u,{method:existingId?'PATCH':'POST',headers:{'Content-Type':'multipart/related; boundary='+b},body:data});}
+async function dvBlobUpload(name,parent,blob,existingId){const meta={name};if(!existingId&&parent)meta.parents=[parent];
+ const b='mahalp'+Date.now()+Math.floor(Math.random()*1e6);
+ const body=new Blob(['--'+b+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+'\r\n--'+b+'\r\nContent-Type: image/jpeg\r\n\r\n',blob,'\r\n--'+b+'--']);
+ const u=existingId?('https://www.googleapis.com/upload/drive/v3/files/'+existingId+'?uploadType=multipart&fields=id'):'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id';
+ return dvApi(u,{method:existingId?'PATCH':'POST',headers:{'Content-Type':'multipart/related; boundary='+b},body});}
+async function dvBlob(fileId){const r=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(fileId)+'?alt=media',{headers:{Authorization:'Bearer '+driveTok}});if(!r.ok)throw new Error('Drive '+r.status);return r.blob();}
+async function dvPhotoFolder(parent,create){let f=await dvFindOrMake('صور الأصناف',parent,'application/vnd.google-apps.folder');
+ if(!f&&create){const r=await dvApi('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'صور الأصناف',mimeType:'application/vnd.google-apps.folder',parents:[parent]})});f=r.id;}return f;}
+async function dvPhotoMap(pf){const m={};let tok='';for(let i=0;i<20;i++){const q="'"+pf+"' in parents and trashed=false";const r=await dvApi('https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=nextPageToken,files(id,name)&q='+encodeURIComponent(q)+(tok?'&pageToken='+tok:''));
+ (r.files||[]).forEach(f=>{const x=f.name.match(/^photo-(.+)\.jpg$/);if(x)m[x[1]]=f.id;});if(!r.nextPageToken)break;tok=r.nextPageToken;}return m;}
+
+/* ---- r47: طلبات المتجر في النسخة + أرشيف سجل العمليات (للقراءة بس) ---- */
+const DV_ARCH_TAG='أرشيف سجل العمليات';
+async function dvFetchOrders(){const all=[];for(let off=0;off<200000;off+=1000){const rows=await SB.req('orders?select=*&order=id.asc&limit=1000&offset='+off);if(!Array.isArray(rows))throw new Error('orders');all.push(...rows);if(rows.length<1000)break;}return all;}
+function dvOrderSig(o){return [new Date(o.created_at).getTime(),String(o.customer_name||''),String(o.phone||''),Number(o.total)].join('|');}
+async function dvFetchAudit(){const all=[];let before=null;for(let i=0;i<400;i++){const rows=await rpc('shop_audit_list',{p_before:before,p_actor:null,p_table:null});if(!Array.isArray(rows)||!rows.length)break;all.push(...rows);before=rows[rows.length-1].id;if(rows.length<2)break;}return all;}
+async function pushDriveBackup(){if(driveBusy||!dvLive()||!curUser||!curUser.owner)return;driveBusy=true;const s=dvGet();let more=false;
+ try{const folder=await dvEnsureFolder(s);
+  const shop=((DB.settings&&(DB.settings.shopName||DB.settings.name))||'المحل').replace(/[\\\/:*?"<>|]/g,' ').trim();
+  /* صور الأصناف: ملف لكل صورة، بيترفع بس لو اتغيرت (٢٥ في الدفعة) */
+  const ph=s.ph||{};let n=0;
+  try{for(const pr of DB.products){if(!pr.photo||!pr.photoVer)continue;if(ph[pr.id]&&ph[pr.id].v===pr.photoVer)continue;if(n>=25){more=true;break;}
+   let blob=await PHOTOS.get(pr.id);if(!blob){try{const rr=await fetch(SB.photoUrlFor(pr));if(rr.ok)blob=await rr.blob();}catch(e){}}
+   if(!blob)continue;
+   if(!s.pf){s.pf=await dvPhotoFolder(folder,true);}
+   let fid=ph[pr.id]&&ph[pr.id].f;
+   try{const r=await dvBlobUpload('photo-'+pr.id+'.jpg',s.pf,blob,fid||null);fid=r.id;}catch(e){if(/Drive 404/.test(e.message)){const r=await dvBlobUpload('photo-'+pr.id+'.jpg',s.pf,blob,null);fid=r.id;}else throw e;}
+   ph[pr.id]={v:pr.photoVer,f:fid};n++;}}catch(e){if(/انتهت/.test(e.message))throw e;s.photoErr=e.message;}
+  s.ph=ph;
+  /* الموظفين: الاسم والصلاحيات وربط الحساب (مفيش باسوردات) */
+  let staff=null;try{await SB.ensureSession();const rr=await SB.req('shop_users?select=id,name,owner,active,perms,auth_id');if(Array.isArray(rr))staff=rr;}catch(e){}
+  let orders=null;try{await SB.ensureSession();orders=await dvFetchOrders();s.ordersErr=null;}catch(e){s.ordersErr='الطلبات ماتحفظتش المرة دي';}
+  const payload=JSON.stringify({app:'mahal',version:APP_VER,tenantId:curUser.tenantId||null,savedAt:new Date().toISOString(),staff,orders,photoCount:Object.keys(ph).length,data:DB});
+  let fid=s.file;if(fid){try{await dvUpload(shop+' - آخر نسخة.json',folder,payload,fid);}catch(e){if(/Drive 404/.test(e.message)){fid=null;}else throw e;}}
+  if(!fid){const r=await dvUpload(shop+' - آخر نسخة.json',folder,payload,null);fid=r.id;}
+  const today=new Date().toISOString().slice(0,10);if(s.dayCopy!==today){await dvUpload(shop+' - '+today+'.json',folder,payload,null);s.dayCopy=today;}
+  /* أرشيف سجل العمليات: ملف لوحده، بيتجدد كل ٦ ساعات. للعرض بس، مابيترجعش للسجل الحي */
+  try{if(!s.auditAt||Date.now()-new Date(s.auditAt).getTime()>6*3600*1000||!s.auditFile){const rows=await dvFetchAudit();
+   if(rows.length||s.auditFile){const ap=JSON.stringify({app:'mahal-audit-archive',tenantId:curUser.tenantId||null,savedAt:new Date().toISOString(),count:rows.length,rows});
+    let af=s.auditFile;if(af){try{await dvUpload(shop+' - '+DV_ARCH_TAG+'.json',folder,ap,af);}catch(e){if(/Drive 404/.test(e.message))af=null;else throw e;}}
+    if(!af){const r=await dvUpload(shop+' - '+DV_ARCH_TAG+'.json',folder,ap,null);af=r.id;}
+    s.auditFile=af;s.auditAt=new Date().toISOString();s.auditCount=rows.length;}}}catch(e){if(/انتهت/.test(e.message))throw e;s.auditErr=true;}
+  s.folder=folder;s.file=fid;s.last=new Date().toISOString();delete s.err;s.pending=more;dvSet(s);
+ }catch(e){const t=dvGet();t.err=(e&&e.message)||String(e);dvSet(t);}
+ driveBusy=false;driveRefreshUI();if(more)setTimeout(pushDriveBackup,3000);}
+function scheduleDriveBackup(){const s=dvGet();if(!s.connected)return;s.pending=true;dvSet(s);clearTimeout(driveTimer);if(dvLive())driveTimer=setTimeout(pushDriveBackup,20000);else driveRefreshUI();}
+async function driveSyncPress(){if(!curUser||!curUser.owner){toast('المزامنة لصاحب المحل بس');return;}
+ if(!DRIVE_CLIENT_ID){toast('مزامنة Drive لسه ماتفعّلتش على الخدمة');return;}
+ try{await dvLoadGIS();}catch(e){toast(e.message);return;}
+ if(!driveTC)driveTC=google.accounts.oauth2.initTokenClient({client_id:DRIVE_CLIENT_ID,scope:DRIVE_SCOPE,callback:async resp=>{
+  if(resp.error){const t=dvGet();t.err='جوجل رفض: '+resp.error;dvSet(t);driveRefreshUI();return;}
+  driveTok=resp.access_token;driveTokExp=Date.now()+(Number(resp.expires_in||3600)*1000);
+  const t=dvGet();t.connected=true;delete t.err;
+  try{const a=await dvApi('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)');t.email=a.user&&a.user.emailAddress;}catch(e){}
+  dvSet(t);driveRefreshUI();toast('اتوصل بـ Drive ✓ بنرفع أول نسخة');pushDriveBackup();}});
+ driveTC.requestAccessToken({prompt:dvGet().connected?'':'consent'});}
+function driveDisconnect(){const s=dvGet();try{if(driveTok&&window.google)google.accounts.oauth2.revoke(driveTok);}catch(e){}driveTok=null;dvSet({});driveRefreshUI();toast('اتفصل عن Drive (النسخ اللي على درايفك فضلت زي ما هي)');}
+function driveRowHTML(){return `<div class="set-row" style="cursor:default">${ic('lock')}<span>مزامنة Drive<span class="s" style="display:block" id="dv-status">${driveStatusText()}</span><span class="s" style="display:block;margin-top:2px">بترفع نسخة على درايفك إنت وإنت فاتح البرنامج. لو قفلته مابترفعش لحد ما تفتحه.</span></span></div>
+<div style="display:flex;gap:8px;padding:4px 2px 10px"><button class="cbtn" style="flex:1;background:var(--blue);color:#fff" onclick="driveSyncPress()">مزامنة Drive</button>${dvGet().connected?'<button class="cbtn" style="flex:0 0 auto" onclick="driveDisconnect()">فصل</button>':''}</div>
+${dvGet().connected?'<div style="padding:0 2px 10px"><button class="cbtn" style="width:100%" onclick="driveRestoreOpen()">استرجاع من Drive</button><button class="cbtn" style="width:100%;margin-top:8px" onclick="archOpen()">أرشيف سجل العمليات (للقراءة بس)</button></div>':''}`;}
+/* ---- استرجاع من Drive: بيرجّع الناقص بس، مابيمسحش ولا بيبدّل حاجة موجودة ---- */
+const DV_LBL={products:'أصناف',customers:'زباين',suppliers:'موردين',invoices:'فواتير',purchases:'توريدات',payments:'دفعات',movements:'حركات مخزون',returns:'مرتجعات',expenses:'مصروفات',drawer:'حركات الدرج',dayCloses:'قفل يوم',serviceTxns:'خدمات',offers:'عروض',devices:'أجهزة',contracts:'عقود أقساط',tickets:'صيانة'};
+let dvRestoreBusy=false,dvPlan=null;
+function dvDateAr(iso){try{return new Date(iso).toLocaleString('ar-EG',{dateStyle:'medium',timeStyle:'short'});}catch(e){return iso||'';}}
+async function driveRestoreOpen(){
+ if(!curUser||!curUser.owner){toast('الاسترجاع لصاحب المحل بس');return;}
+ if(!dvLive()){toast('دوس "مزامنة Drive" الأول عشان تكمل، وبعدها دوس استرجاع');return;}
+ if(dvRestoreBusy)return;dvRestoreBusy=true;toast('بندوّر على النسخ اللي على درايفك…');
+ try{const s=dvGet();const folder=await dvReadFolder(s);
+  if(!folder){toast('مفيش فولدر نسخ على درايفك لسه');dvRestoreBusy=false;return;}
+  const q="'"+folder+"' in parents and trashed=false and mimeType='application/json'";
+  const r=await dvApi('https://www.googleapis.com/drive/v3/files?pageSize=30&orderBy=modifiedTime desc&fields=files(id,name,modifiedTime)&q='+encodeURIComponent(q));
+  const fs=(r.files||[]).filter(f=>f.name.indexOf(DV_ARCH_TAG)<0);
+  if(!fs.length){toast('مفيش نسخ على درايفك لسه');dvRestoreBusy=false;return;}
+  window._dvFiles=fs;
+  sheet('استرجاع من Drive',`<p style="font-size:13px;color:var(--muted);margin-bottom:10px">اختار النسخة. هتشوف الأول إيه الناقص وبعدين تأكد. مفيش حاجة هتتمسح ولا هتتبدل.</p>`+fs.map((f,i)=>`<button class="btn" style="width:100%;text-align:right;border:1px solid var(--line);margin-bottom:8px" onclick="driveRestorePick(${i})"><b>${esc(f.name.replace(/\.json$/,''))}</b><span style="display:block;font-size:12px;color:var(--muted)">${esc(dvDateAr(f.modifiedTime))}</span></button>`).join(''));
+ }catch(e){toast((e&&e.message)||'في مشكلة في الاتصال بـ Drive');}
+ dvRestoreBusy=false;}
+async function dvServerIds(table){const ids=new Set();for(let off=0;off<200000;off+=1000){const rows=await SB.req(table+'?select=id&order=id.asc&limit=1000&offset='+off);if(!rows||!rows.length)break;rows.forEach(x=>ids.add(String(x.id)));if(rows.length<1000)break;}return ids;}
+const DV_SKIP_SET=['shopName','migratedV2'];
+async function driveRestorePick(i){
+ const f=(window._dvFiles||[])[i];if(!f||dvRestoreBusy)return;
+ if(!curUser||!curUser.owner){toast('الاسترجاع لصاحب المحل بس');return;}
+ if(!navigator.onLine){toast('مفيش اتصال بالنت');return;}
+ if(outboxPending()>0){toast('فيه عمليات لسه مارفعتش. استنى لحد ما تتزامن وجرب تاني');return;}
+ dvRestoreBusy=true;toast('بنقرأ النسخة ومقارنتها…');
+ try{
+  const tenant=curUser.tenantId;
+  const bk=await dvApi('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(f.id)+'?alt=media');
+  if(!bk||bk.app!=='mahal'||!bk.data||typeof bk.data!=='object'||!Array.isArray(bk.data.products)||!bk.data.settings){toast('الملف ده مش نسخة من البرنامج');dvRestoreBusy=false;return;}
+  const bShop=(bk.data.settings&&bk.data.settings.shopName)||'';
+  if(bk.tenantId&&bk.tenantId!==tenant){closeSheet();sheet('النسخة دي لمحل تاني',`<p style="font-size:14px">النسخة دي اتعملت لمحل غير المحل اللي إنت داخل بيه. مش هرجّعها هنا.</p>`);dvRestoreBusy=false;return;}
+  if(!bk.tenantId&&bShop&&bShop!==(DB.settings&&DB.settings.shopName)){closeSheet();sheet('النسخة دي مش لنفس المحل',`<p style="font-size:14px">النسخة دي باسم «${esc(bShop)}» وإنت داخل على «${esc((DB.settings&&DB.settings.shopName)||'')}». مش هرجّعها هنا.</p>`);dvRestoreBusy=false;return;}
+  await SB.ensureSession();
+  if(curUser?.tenantId!==tenant)throw new Error('account changed');
+  const plan=[];let total=0;
+  for(const key of entOrder()){const e=ENT[key];const rows=Array.isArray(bk.data[key])?bk.data[key].filter(x=>x&&x.id!=null):[];if(!rows.length)continue;
+   const have=await dvServerIds(e.table);const miss=rows.filter(x=>!have.has(String(x.id)));
+   plan.push({key,have:have.size,inBackup:rows.length,miss});total+=miss.length;}
+  let orderMiss=[],ordersIn=0,ordersHave=0;
+  if(Array.isArray(bk.orders)&&bk.orders.length){const orows=bk.orders.filter(x=>x&&x.created_at);ordersIn=orows.length;const cur=await dvFetchOrders();ordersHave=cur.length;const sigs=new Set(cur.map(dvOrderSig));orderMiss=orows.filter(x=>!sigs.has(dvOrderSig(x)));}
+  /* الموظفين */
+  let staffMiss=[];
+  if(Array.isArray(bk.staff)){const cur=await SB.req('shop_users?select=id,auth_id')||[];const ids=new Set(cur.map(x=>String(x.id))),au=new Set(cur.map(x=>String(x.auth_id)));
+   staffMiss=bk.staff.filter(x=>x&&!x.owner&&x.id&&x.auth_id&&!ids.has(String(x.id))&&!au.has(String(x.auth_id)));}
+  /* الصور */
+  let photoMiss=[];const pcands=bk.data.products.filter(x=>x&&x.id&&x.photo&&x.photoVer&&!x.deleted);
+  if(pcands.length){let pm={};try{const folder=dvGet().folder||f.parents&&f.parents[0];const pf=folder&&await dvPhotoFolder(folder,false);if(pf)pm=await dvPhotoMap(pf);}catch(e){}
+   const need=[];let ix=0;const work=async()=>{while(ix<pcands.length){const pr=pcands[ix++];let ok=false;try{const r=await fetch(SB.photoUrlFor(pr),{method:'HEAD',cache:'no-store'});ok=r.ok;}catch(e){}if(!ok)need.push(pr);}};
+   await Promise.all([work(),work(),work(),work(),work(),work()]);
+   for(const pr of need){const local=await PHOTOS.get(pr.id).catch(()=>null);photoMiss.push({p:pr,fileId:pm[pr.id]||null,local:!!local});}}
+  /* الإعدادات */
+  const sdiff=Object.keys(bk.data.settings).filter(k=>!DV_SKIP_SET.includes(k)&&JSON.stringify(bk.data.settings[k])!==JSON.stringify((DB.settings||{})[k]));
+  dvPlan={tenant,file:f,bk,plan,total,staffMiss,photoMiss,sdiff,orderMiss};
+  const tbl=plan.map(p=>`<tr><td>${esc(DV_LBL[p.key]||p.key)}</td><td>${p.inBackup.toLocaleString(AR)}</td><td>${p.have.toLocaleString(AR)}</td><td><b>${p.miss.length.toLocaleString(AR)}</b></td></tr>`).join('');
+  const pAvail=photoMiss.filter(x=>x.fileId||x.local).length;
+  const extra=[];
+  if(ordersIn)extra.push(`<li>طلبات المتجر الناقصة: <b>${orderMiss.length.toLocaleString(AR)}</b> من ${ordersIn.toLocaleString(AR)} في النسخة (موجود دلوقتي ${ordersHave.toLocaleString(AR)}). بترجع بأسماء الزباين وتليفوناتهم وعناوينهم وحالة كل طلب. السيرفر بيدّيهم رقم جديد، والتاريخ والحالة بيفضلوا زي ما كانوا. والطلب اللي صنفه اتمسح خالص من السيرفر ممكن ما يرجعش.</li>`);
+  else if(!Array.isArray(bk.orders))extra.push(`<li style="color:var(--muted)">النسخة دي مفيهاش طلبات المتجر (اتعملت قبل ما الطلبات تتضاف للنسخة).</li>`);
+  if(photoMiss.length)extra.push(`<li>صور أصناف ناقصة: <b>${photoMiss.length.toLocaleString(AR)}</b>${pAvail<photoMiss.length?` (متاح منها ${pAvail.toLocaleString(AR)}. الباقي مفيش له نسخة على درايفك ولا على الجهاز ده)`:''}</li>`);
+  if(staffMiss.length)extra.push(`<li>موظفين ناقصين: <b>${staffMiss.length.toLocaleString(AR)}</b> (${esc(staffMiss.map(x=>x.name).join('، '))}). بيرجعوا بنفس الصلاحيات. الباسورد مش بيتخزن في أي نسخة، فلو حساب الموظف لسه موجود هيدخل بباسورده القديم، ولو اتمسح هتضيفه من جديد بباسورد جديد.</li>`);
+  if(sdiff.length)extra.push(`<li style="list-style:none;margin-right:-18px"><label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="dv-set" checked style="width:18px;height:18px;margin-top:2px"> <span>إعدادات المحل مختلفة عن النسخة (${sdiff.length.toLocaleString(AR)}): الدفع والتوصيل والمناطق وغيره. لو علّمتها هتتبدل بالنسخة.</span></label></li>`);
+  const todo=total+orderMiss.length+photoMiss.filter(x=>x.fileId||x.local).length+staffMiss.length;
+  closeSheet();
+  sheet('إيه اللي هيترجع',`<p style="font-size:13px;margin-bottom:6px">النسخة: <b>${esc(f.name.replace(/\.json$/,''))}</b><br>اتحفظت: ${esc(dvDateAr(bk.savedAt||f.modifiedTime))}</p>
+  <table style="width:100%;font-size:13px;border-collapse:collapse;text-align:center"><tr style="color:var(--muted)"><td></td><td>في النسخة</td><td>موجود دلوقتي</td><td>هيترجع</td></tr>${tbl}</table>
+  ${extra.length?`<ul style="font-size:13px;line-height:1.8;margin:10px 18px 0 0">${extra.join('')}</ul>`:''}
+  <p style="font-size:12px;color:var(--muted);margin-top:10px">بيرجّع الناقص بس. اللي موجود دلوقتي مش هيتغير ولا هيتمسح (غير الإعدادات لو علّمتها). أرصدة المخزون للأصناف الناقصة بترجع زي ما كانت وقت النسخة. سجل العمليات مابيترجعش للسجل الحي. بيتحفظ كأرشيف للقراءة بس (من «أرشيف سجل العمليات» تحت زر الاسترجاع).</p>
+  ${(todo||sdiff.length)?`<button class="btn btn-p" style="width:100%;margin-top:12px" onclick="driveRestoreApply()">رجّع الناقص</button>`:'<p style="text-align:center;font-weight:700;margin-top:12px">مفيش حاجة ناقصة. كل اللي في النسخة موجود.</p>'}
+  <button class="btn" style="width:100%;margin-top:8px;border:1px solid var(--line)" onclick="closeSheet()">لأ، ارجع</button>`);
+ }catch(e){toast(e&&e.message==='no-auth'?'سجّل دخولك الأول':(e&&/^Drive|انتهت/.test(e.message)?e.message:'القراءة ما كملتش. اتأكد من النت وجرب تاني'));}
+ dvRestoreBusy=false;}
+/* ---- عارض أرشيف سجل العمليات: قراءة بس، مفيش تصحيح ولا استعادة منه ---- */
+let archData=null,archQ='',archBusy=false;
+async function archOpen(){
+ if(!curUser||!curUser.owner){toast('الأرشيف لصاحب المحل بس');return;}
+ if(!dvLive()){toast('دوس "مزامنة Drive" الأول عشان تكمل');return;}
+ if(archBusy)return;archBusy=true;toast('بنفتح الأرشيف من درايفك…');
+ try{const s=dvGet();const folder=await dvReadFolder(s);
+  if(!folder){toast('مفيش فولدر نسخ على درايفك لسه');archBusy=false;return;}
+  const q="'"+folder+"' in parents and trashed=false and mimeType='application/json' and name contains '"+DV_ARCH_TAG+"'";
+  const r=await dvApi('https://www.googleapis.com/drive/v3/files?pageSize=5&orderBy=modifiedTime desc&fields=files(id,name,modifiedTime)&q='+encodeURIComponent(q));
+  const f=(r.files||[])[0];if(!f){toast('مفيش أرشيف سجل على درايفك لسه. بيتعمل مع النسخة الجاية.');archBusy=false;return;}
+  const a=await dvApi('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(f.id)+'?alt=media');
+  if(!a||a.app!=='mahal-audit-archive'||!Array.isArray(a.rows)){toast('الملف ده مش أرشيف سجل');archBusy=false;return;}
+  if(a.tenantId&&curUser.tenantId&&a.tenantId!==curUser.tenantId){toast('الأرشيف ده لمحل تاني');archBusy=false;return;}
+  archData=a;archQ='';closeSheet();go('#/audit-archive');render();
+ }catch(e){toast((e&&/^Drive|انتهت/.test(e.message))?e.message:'مقدرتش أفتح الأرشيف');}
+ archBusy=false;}
+function archCards(rows){return rows.slice(0,300).map(e=>`<div class="total-card" style="margin-top:10px"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(auditActs[e.action]||e.action||'')} ${esc(auditLabels[e.table_name]||e.table_name||'')}</b><small>#${esc(e.row_id||e.id||'')}</small></div><p style="color:var(--muted)">نفّذها: ${esc(e.actor_name||'غير معروف')}</p><p>${esc(e.event_at?new Date(e.event_at).toLocaleString('ar-EG'):'')}</p>${e.reason?`<p>السبب: ${esc(e.reason)}</p>`:''}</div>`).join('')||'<div class="empty">مفيش عمليات مطابقة</div>';}
+function archFilter(v){archQ=v;const rows=(archData&&archData.rows||[]).filter(e=>[e.row_id,e.actor_name,e.reason,auditLabels[e.table_name],auditActs[e.action]].join(' ').includes(v));const el=document.querySelector('#ar-rows');if(el)el.innerHTML=archCards(rows);const c=document.querySelector('#ar-count');if(c)c.textContent=rows.length.toLocaleString(AR)+' عملية'+(rows.length>300?' (بنعرض أول ٣٠٠. ابحث لتضييق النتيجة)':'');}
+function archHTML(){if(!curUser||!curUser.owner||!archData)return vNoPerm();const rows=archData.rows;
+ return `<div class="appbar"><div>${backBtn('#/settings')}<div class="shop">أرشيف سجل العمليات</div><small>${esc(DB.settings.shopName)}</small></div></div><div class="content"><div class="note" style="background:#FFF4D6;border:1px solid #E5C25A;color:#6B4E00;font-weight:700">ده أرشيف محفوظ على درايفك للقراءة بس. مش السجل الحي، ومنه مفيش تصحيح ولا استعادة.</div><p style="font-size:12.5px;color:var(--muted);margin:8px 0">اتحفظ: ${esc(dvDateAr(archData.savedAt))} · ${rows.length.toLocaleString(AR)} عملية (الاسم والنوع والوقت والسبب، من غير تفاصيل قبل/بعد)</p><div class="field"><input id="ar-search" placeholder="ابحث برقم أو اسم الحساب أو النوع" value="${esc(archQ)}" oninput="archFilter(this.value)"></div><p id="ar-count" style="font-size:12.5px;color:var(--muted)">${rows.length.toLocaleString(AR)} عملية${rows.length>300?' (بنعرض أول ٣٠٠. ابحث لتضييق النتيجة)':''}</p><div id="ar-rows">${archCards(archQ?rows.filter(e=>[e.row_id,e.actor_name,e.reason,auditLabels[e.table_name],auditActs[e.action]].join(' ').includes(archQ)):rows)}</div></div>`;}
+async function driveRestoreApply(){
+ const pl=dvPlan;if(!pl||dvRestoreBusy)return;
+ if(!curUser||!curUser.owner||curUser.tenantId!==pl.tenant){toast('الحساب اتغير. ابدأ من الأول');return;}
+ if(!navigator.onLine){toast('مفيش اتصال بالنت');return;}
+ const wantSet=!!(document.getElementById('dv-set')&&document.getElementById('dv-set').checked);
+ dvRestoreBusy=true;dvPlan=null;closeSheet();toast('بنرجّع البيانات…');
+ const res={ord:0,ordFail:0,rows:0,staff:0,staffFail:0,ph:0,phFail:0,phNo:0,set:false};let stage='';
+ try{await SB.ensureSession();
+  for(const p of pl.plan){if(!p.miss.length)continue;stage=p.key;const e=ENT[p.key];
+   const rows=p.miss.map(x=>{const r=e.map(x);if(p.key==='products')r.photo_url=null;return r;});
+   for(let i=0;i<rows.length;i+=200){await SB.req(e.table,{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify(rows.slice(i,i+200))});res.rows+=Math.min(200,rows.length-i);}}
+  stage='';
+  const inv=pl.plan.find(p=>p.key==='invoices');
+  if(inv&&inv.miss.length){const mx=await SB.req('invoices?select=num&order=num.desc&limit=1');const n=mx&&mx[0]&&Number(mx[0].num);if(n)await rpc('set_invoice_counter',{v:n});}
+  for(const u of pl.staffMiss){try{await SB.req('shop_users',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=ignore-duplicates,return=minimal'},body:JSON.stringify([{id:u.id,name:u.name,auth_id:u.auth_id,owner:false,active:u.active!==false,perms:u.perms||{},updated_at:new Date().toISOString()}])});res.staff++;}catch(e){res.staffFail++;}}
+  usersCache=null;
+  if(pl.orderMiss&&pl.orderMiss.length){const strip=o=>{const r={...o};['id','created_actor_id','created_actor_name','updated_actor_id','updated_actor_name'].forEach(k=>delete r[k]);return r;};
+   const one=async o=>{try{await SB.req('orders',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify([strip(o)])});res.ord++;}catch(e){res.ordFail++;}};
+   for(const o of pl.orderMiss)await one(o);}
+  for(const m of pl.photoMiss){let blob=null;try{if(m.fileId)blob=await dvBlob(m.fileId);}catch(e){}
+   if(!blob)blob=await PHOTOS.get(m.p.id).catch(()=>null);
+   if(!blob){res.phNo++;continue;}
+   try{await SB.uploadPhoto(m.p.id,blob);await PHOTOS.set(m.p.id,blob);
+    await SB.req('products?id=eq.'+encodeURIComponent(m.p.id),{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({photo_url:SB.photoUrlFor(m.p),updated_at:new Date().toISOString()})});res.ph++;}
+   catch(e){res.phFail++;}}
+  if(wantSet&&pl.sdiff.length){const bs=pl.bk.data.settings;pl.sdiff.forEach(k=>{DB.settings[k]=bs[k];});res.set=true;
+   try{await SB.req('shop_info',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{id:1,shop_name:DB.settings.shopName,owner_name:DB.settings.ownerName||'',phone:DB.settings.phone||'',payment:DB.settings.pay||{cash:{on:true}},delivery_fee:DB.settings.deliveryFee||0,zones:DB.settings.zones||[],delivery_on:DB.settings.deliveryOn!==false,updated_at:new Date().toISOString()}])});}catch(e){}}
+  await pullDelta(true);
+  try{const mx=DB.invoices.reduce((m,i)=>Math.max(m,i.num||0),0);if(mx>=DB.nextNum){DB.nextNum=mx+1;}}catch(e){}
+  save();render();
+  const L=[];L.push('اتّرجع '+res.rows.toLocaleString(AR)+' عنصر');
+  if(pl.orderMiss&&pl.orderMiss.length)L.push('طلبات المتجر: '+res.ord.toLocaleString(AR)+(res.ordFail?(' (فشل '+res.ordFail.toLocaleString(AR)+')'):''));
+  if(pl.photoMiss.length)L.push('صور: '+res.ph.toLocaleString(AR)+' من '+pl.photoMiss.length.toLocaleString(AR));
+  if(pl.staffMiss.length)L.push('موظفين: '+res.staff.toLocaleString(AR)+(res.staffFail?' (فشل '+res.staffFail.toLocaleString(AR)+')':''));
+  if(res.set)L.push('الإعدادات اتبدلت');
+  sheet('خلص الاسترجاع ✓',`<ul style="font-size:14px;line-height:2;margin-right:18px">${L.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul>${(res.phNo||res.phFail||res.staffFail||res.ordFail)?`<p style="font-size:12.5px;color:var(--muted)">${res.phNo?'فيه '+res.phNo.toLocaleString(AR)+' صورة مالقيتهاش في الدرايف ولا على الجهاز ده. ':''}${res.phFail?res.phFail.toLocaleString(AR)+' صورة فشل رفعها. ':''}${res.ordFail?res.ordFail.toLocaleString(AR)+' طلب السيرفر رفضه (غالباً صنف فيه مش موجود). باقي البيانات اترجعت عادي. ':''}${res.staffFail?'موظفين فشل رجوعهم، ضيفهم من إدارة المستخدمين. ':''}تقدر تعيد الاسترجاع وهيكمل الناقص بس.</p>`:''}<button class="btn btn-p" style="width:100%;margin-top:10px" onclick="closeSheet()">تمام</button>`);
+ }catch(e){try{await pullDelta(true);render();}catch(_){}
+  toast('الاسترجاع وقف في النص ('+res.rows.toLocaleString(AR)+' اترجعوا). ممكن تعيده وهيكمل الناقص بس.');}
+ dvRestoreBusy=false;}
 
 /* @shop-audit */
 /* Shop audit, owner-only. Never guess unknown historical actors. */
